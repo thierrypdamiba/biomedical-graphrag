@@ -20,7 +20,7 @@
 
 ## Table of Contents
 
-- [biomedical-graphrag](#-project_name-)
+- [Biomedical GraphRag](#biomedical-graphrag)
   - [Table of Contents](#table-of-contents)
   - [Overview](#overview)
   - [Project Structure](#project-structure)
@@ -28,8 +28,17 @@
   - [Installation](#installation)
   - [Usage](#usage)
     - [Configuration](#configuration)
-    - [Module 1](#module-1)
-    - [Module 2](#module-2)
+    - [Data Collection](#data-collection)
+      - [PubMed Data Collection](#pubmed-data-collection)
+      - [Gene Data Collection](#gene-data-collection)
+    - [Infrastructure Setup](#infrastructure-setup)
+      - [Neo4j Graph Database](#neo4j-graph-database)
+      - [Qdrant Vector Database](#qdrant-vector-database)
+    - [Query Commands](#query-commands)
+      - [Qdrant Vector Search](#qdrant-vector-search)
+      - [Hybrid Neo4j + Qdrant Queries](#hybrid-neo4j--qdrant-queries)
+      - [Available Query Types](#available-query-types)
+      - [Sample Queries](#sample-queries)
     - [Testing](#testing)
     - [Quality Checks](#quality-checks)
   - [License](#license)
@@ -89,8 +98,8 @@ biomedical-graphrag-pipeline/
 1. Clone the repository:
 
    ```bash
-   git clone git@github.com:benitomartin/biomedical-graphrag-pipeline.git
-   cd biomedical-graphrag-pipeline
+   git clone git@github.com:benitomartin/biomedical-graphrag.git
+   cd biomedical-graphrag
    ```
 
 1. Create a virtual environment:

@@ -34,7 +34,7 @@ class Neo4jGraphQuery:
         """
         return """
         Biomedical Graph Schema:
-        
+
         Nodes:
         - Paper: {pmid, title, abstract, publication_date, doi}
         - Author: {name}
@@ -43,7 +43,7 @@ class Neo4jGraphQuery:
         - Qualifier: {name}
         - Journal: {name}
         - Gene: {gene_id, name, description, chromosome, map_location, organism, aliases, designations}
-        
+
         Relationships:
         - (Author)-[:WROTE]->(Paper)
         - (Author)-[:AFFILIATED_WITH]->(Institution)

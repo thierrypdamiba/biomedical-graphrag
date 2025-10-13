@@ -69,10 +69,14 @@ class GeneAPIClient:
                                     if per_attempt > max_retries:
                                         break
                                     await asyncio.sleep(
-                                        base_backoff * (2 ** (per_attempt - 1)) + random.uniform(0, 0.4)
+                                        base_backoff * (2 ** (per_attempt - 1))
+                                        + random.SystemRandom().uniform(0, 0.4)
                                     )
                         break
-                    await asyncio.sleep(base_backoff * (2 ** (attempt - 1)) + random.uniform(0, 0.4))
+                    await asyncio.sleep(
+                        base_backoff * (2 ** (attempt - 1))
+                        + random.SystemRandom().uniform(0, 0.4)
+                    )
 
             for r in record:
                 id_list = r.get("IdList", [])

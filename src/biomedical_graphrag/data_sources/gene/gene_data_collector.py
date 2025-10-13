@@ -114,10 +114,10 @@ class GeneDataCollector(BaseDataSource):
                                             f"Per-ID elink permanently failed for GeneID={gid}"
                                         )
                                         break
-                                    jitter = random.uniform(0, 0.4)
+                                    jitter = random.SystemRandom().uniform(0, 0.4)
                                     await asyncio.sleep(base_backoff * (2 ** (per_attempt - 1)) + jitter)
                         break
-                    jitter = random.uniform(0, 0.4)
+                    jitter = random.SystemRandom().uniform(0, 0.4)
                     await asyncio.sleep(base_backoff * (2 ** (attempt - 1)) + jitter)
 
             for linkset in record:
