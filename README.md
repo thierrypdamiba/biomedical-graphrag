@@ -45,6 +45,8 @@
 
 A comprehensive GraphRAG (Graph Retrieval-Augmented Generation) system designed for biomedical research. It combines knowledge graphs with vector search to provide intelligent querying and analysis of biomedical literature and genomic data.
 
+Article: [Building a Biomedical GraphRAG: When Knowledge Graphs Meet Vector Search](https://aiechoes.substack.com/p/building-a-biomedical-graphrag-when)
+
 **Key Features:**
 
 - **Hybrid Query System**: Combines Neo4j graph database with Qdrant vector search for comprehensive biomedical insights
