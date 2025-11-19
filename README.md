@@ -67,18 +67,18 @@ biomedical-graphrag-pipeline/
 │       ├── application/        # Application layer
 │       │   ├── cli/            # Command-line interfaces
 │       │   └── services/       # Business logic services
-│       ├── config.py          # Configuration management
-│       ├── data_sources/      # Data collection modules
-│       ├── domain/            # Domain models and entities
-│       ├── infrastructure/    # Database and external service adapters
-│       └── utils/             # Utility functions
+│       ├── config.py           # Configuration management
+│       ├── data_sources/       # Data collection modules
+│       ├── domain/             # Domain models and entities
+│       ├── infrastructure/     # Database and external service adapters
+│       └── utils/              # Utility functions
 ├── static/                     # Static assets (images, etc.)
 ├── tests/                      # Test suite
 ├── LICENSE                     # MIT License
 ├── Makefile                    # Build and development commands
-├── pyproject.toml             # Project configuration and dependencies
-├── README.md                  # This file
-└── uv.lock                    # Dependency lock file
+├── pyproject.toml              # Project configuration and dependencies
+├── README.md                   # This file
+└── uv.lock                     # Dependency lock file
 ```
 
 ## Prerequisites
