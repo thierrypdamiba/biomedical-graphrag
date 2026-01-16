@@ -10,6 +10,8 @@ from biomedical_graphrag.domain.gene import GeneRecord
 from biomedical_graphrag.domain.paper import Paper
 from biomedical_graphrag.utils.logger_util import setup_logging
 
+import uuid
+
 logger = setup_logging()
 
 
@@ -52,6 +54,11 @@ class AsyncQdrantVectorStore:
                     size=self.embedding_dimension, distance=models.Distance.COSINE
                 )
             },
+            sparse_vectors_config={
+                "Lexical": models.SparseVectorParams(
+                    modifier=models.Modifier.IDF
+                )
+            },
         )
         logger.info(f"✅ Collection '{self.collection_name}' created successfully")
 
@@ -65,7 +72,7 @@ class AsyncQdrantVectorStore:
         await self.client.delete_collection(collection_name=self.collection_name)
         logger.info(f"✅ Collection '{self.collection_name}' deleted successfully")
 
-    async def _dense_vectors(self, text: str) -> list[float]:
+    async def _get_dense_vectors(self, text: str) -> list[float]:
         """
         Get the embedding vector for the given text (async).
         Args:
@@ -82,8 +89,26 @@ class AsyncQdrantVectorStore:
             logger.error(f"❌ Failed to create embedding: {e}")
             raise
 
+    def _define_bm25_vectors(self, text: str, avg_len: int = 256) -> models.Document:
+        """
+        Wrap text in models.Document to later handle BM25 sparse vectors inference 
+        in Qdrant core.
+
+        Args:
+                text (str): Input text.
+                avg_len (int): Average document length estimation for BM25 formula.
+        Returns:
+                models.Document: Document object.
+        """
+        return models.Document(text=text, 
+                               model="qdrant/bm25", 
+                               options={"avg_len": avg_len, 
+                                        "language": "english"
+                                    }
+                                )
+
     async def upsert_points(
-        self, pubmed_data: dict[str, Any], gene_data: dict[str, Any] | None = None, batch_size: int = 50
+        self, pubmed_data: dict[str, Any], gene_data: dict[str, Any] | None = None, batch_size: int = 50, estimate_bm25_avg_len_on_docs: int = 300
     ) -> None:
         """
         Upsert points into a collection from pubmed_dataset.json structure,
@@ -112,6 +137,18 @@ class AsyncQdrantVectorStore:
         total_processed = 0
         total_skipped = 0
 
+        # Estimate average abstract length for BM25
+        total_words = 0
+        sampled_count = 0
+        for paper in papers:
+            if paper.get("abstract"):
+                total_words += len(paper["abstract"].split())
+                sampled_count += 1
+                if sampled_count >= estimate_bm25_avg_len_on_docs:
+                    break
+        avg_abstracts_len = total_words // sampled_count if sampled_count > 0 else 256
+        logger.info(f"📏 Estimated average abstract length, {avg_abstracts_len} words, for BM25 formula")
+
         # Process papers in batches
         for i in range(0, len(papers), batch_size):
             batch_papers = papers[i : i + batch_size]
@@ -122,7 +159,8 @@ class AsyncQdrantVectorStore:
 
             batch_ids = []
             batch_payloads = []
-            batch_vectors = []
+            batch_dense_vectors = []
+            batch_sparse_vectors = []
             batch_skipped = 0
 
             for paper in batch_papers:
@@ -137,10 +175,15 @@ class AsyncQdrantVectorStore:
 
                 if not title or not abstract or not pmid:
                     batch_skipped += 1
-                    continue  # skip incomplete papers
+                    logger.info(
+                        f"⚠️ Skipping paper {pmid or 'unknown'} due to missing fields - "
+                        f"Fields exist: Title: {bool(title)}, Abstract: {bool(abstract)}, PMID: {bool(pmid)}"
+                    )
+                    continue
 
                 try:
-                    vector = await self._dense_vectors(abstract)
+                    dense_vector = await self._get_dense_vectors(abstract)
+                    sparse_vector = self._define_bm25_vectors(abstract, avg_len=avg_abstracts_len)
 
                     # Get citation network for this paper if available
                     citation_info = citation_network_dict.get(pmid, {})
@@ -163,9 +206,10 @@ class AsyncQdrantVectorStore:
                         "genes": [g.model_dump() for g in pmid_to_genes.get(pmid, [])],
                     }
 
-                    batch_ids.append(int(pmid))
+                    batch_ids.append(str(uuid.uuid4()))
                     batch_payloads.append(payload)
-                    batch_vectors.append(vector)
+                    batch_dense_vectors.append(dense_vector)
+                    batch_sparse_vectors.append(sparse_vector)
 
                 except Exception as e:
                     logger.error(f"❌ Failed to process paper {pmid}: {e}")
@@ -180,7 +224,8 @@ class AsyncQdrantVectorStore:
                         points=Batch(
                             ids=[str(i) for i in batch_ids],
                             payloads=batch_payloads,
-                            vectors={"Dense": [list(v) for v in batch_vectors]},
+                            vectors={"Dense": [list(v) for v in batch_dense_vectors],
+                                     "Lexical": batch_sparse_vectors},
                         ),
                     )
                     total_processed += len(batch_ids)

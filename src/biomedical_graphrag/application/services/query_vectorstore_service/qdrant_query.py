@@ -7,11 +7,13 @@ from biomedical_graphrag.config import settings
 from biomedical_graphrag.infrastructure.qdrant_db.qdrant_vectorstore import AsyncQdrantVectorStore
 from biomedical_graphrag.utils.logger_util import setup_logging
 
+from qdrant_client.models import models
+
 logger = setup_logging()
 
 
 class AsyncQdrantQuery:
-    """Handles querying Qdrant vector store using LangChain for natural language questions (async)."""
+    """Handles querying Qdrant vector store for natural language questions (async)."""
 
     def __init__(self) -> None:
         """
@@ -30,9 +32,10 @@ class AsyncQdrantQuery:
         """Close the async Qdrant client."""
         await self.qdrant_client.close()
 
-    async def retrieve_documents(self, question: str, top_k: int = 5) -> list[dict]:
+    async def retrieve_documents_dense(self, question: str, top_k: int = 5) -> list[dict]:
         """
         Query the Qdrant vector store for similar documents (async).
+        Vanilla dense search.
 
         Args:
             question (str): Input question to query.
@@ -40,15 +43,58 @@ class AsyncQdrantQuery:
         Returns:
             List of dictionaries containing the top_k similar documents.
         """
-        embedding = await self.qdrant_client._dense_vectors(question)
+        dense_vector = await self.qdrant_client._get_dense_vectors(question)
 
         search_result = await self.qdrant_client.client.query_points(
             collection_name=self.collection_name,
-            query=embedding,
+            query=dense_vector,
             using="Dense",
             limit=top_k,
             with_payload=True,
         )
+        results = [
+            {
+                "id": point.id,
+                "score": point.score,
+                "payload": point.payload,
+            }
+            for point in search_result.points
+        ]
+        return results
+    
+    async def retrieve_documents_hybrid(self, question: str, top_k: int = 5) -> list[dict]:
+        """
+        Query the Qdrant vector search engine (async).
+        Hybrid dense + lexical search, fused with Reciprocal Rank Fusion.
+
+        Args:
+            question (str): Input question - query.
+            top_k (int): Number of top similar documents to retrieve.
+        Returns:
+            List of dictionaries containing the top_k similar documents.
+        """
+        dense_vector = await self.qdrant_client._get_dense_vectors(question)
+        sparse_vector = self.qdrant_client._define_bm25_vectors(question)
+
+        search_result = await self.qdrant_client.client.query_points(
+            collection_name=self.collection_name,
+            prefetch=[
+                models.Prefetch(
+                    query=dense_vector,
+                    using="Dense",
+                    limit=top_k,
+                ),
+                models.Prefetch(
+                    query=sparse_vector,
+                    using="Lexical",
+                    limit=top_k,
+                ),
+            ],
+            query=models.RrfQuery(rrf=models.Rrf(k=60)),
+            limit=top_k,
+            with_payload=True,
+        )
+
         results = [
             {
                 "id": point.id,
@@ -72,9 +118,8 @@ class AsyncQdrantQuery:
         context = QDRANT_GENERATION_PROMPT.format(
             question=question,
             context="\n".join(
-                f"Document ID: {doc['id']}, \
-                  Content: {doc['payload']}"
-                for doc in await self.retrieve_documents(question)
+                f"Content: {doc['payload']}"
+                for doc in await self.retrieve_documents_hybrid(question)
             ),
         )
         logger.debug(f"Qdrant context: {context}")
