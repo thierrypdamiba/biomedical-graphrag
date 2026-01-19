@@ -35,6 +35,9 @@ class QdrantSettings(BaseModel):
         default="text-embedding-3-small", description="OpenAI embedding model to use"
     )
     embedding_dimension: int = Field(default=1536, description="Dimension of the OpenAI embedding model")
+    estimate_bm25_avg_len_on_x_docs: int = Field(
+        default=300, description="Number of documents to sample for estimating average length of documents, used in BM25 formula"
+    )
 
 
 class PubMedSettings(BaseModel):

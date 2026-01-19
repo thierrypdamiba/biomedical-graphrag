@@ -28,6 +28,7 @@ class AsyncQdrantVectorStore:
         self.api_key = settings.qdrant.api_key
         self.collection_name = settings.qdrant.collection_name
         self.embedding_dimension = settings.qdrant.embedding_dimension
+        self.estimate_bm25_avg_len_on_x_docs = settings.qdrant.estimate_bm25_avg_len_on_x_docs
 
         self.openai_client = AsyncOpenAI(api_key=settings.openai.api_key.get_secret_value())
 
@@ -41,7 +42,7 @@ class AsyncQdrantVectorStore:
 
     async def create_collection(self) -> None:
         """
-        Create a new collection in Qdrant (async).
+        Create a new collection in Qdrant (async) for hybrid search.
         Args:
                 collection_name (str): Name of the collection.
                 kwargs: Additional parameters for collection creation.
@@ -91,8 +92,8 @@ class AsyncQdrantVectorStore:
 
     def _define_bm25_vectors(self, text: str, avg_len: int = 256) -> models.Document:
         """
-        Wrap text in models.Document to later handle BM25 sparse vectors inference 
-        in Qdrant core.
+        Wrap text in models.Document to handle BM25 sparse vectors inference 
+        in Qdrant's core.
 
         Args:
                 text (str): Input text.
@@ -100,15 +101,17 @@ class AsyncQdrantVectorStore:
         Returns:
                 models.Document: Document object.
         """
-        return models.Document(text=text, 
-                               model="qdrant/bm25", 
-                               options={"avg_len": avg_len, 
-                                        "language": "english"
-                                    }
-                                )
+        return models.Document(
+                            text=text, 
+                            model="qdrant/bm25", 
+                            options={
+                                "avg_len": avg_len, 
+                                "language": "english"
+                            }
+                        )
 
     async def upsert_points(
-        self, pubmed_data: dict[str, Any], gene_data: dict[str, Any] | None = None, batch_size: int = 50, estimate_bm25_avg_len_on_docs: int = 300
+        self, pubmed_data: dict[str, Any], gene_data: dict[str, Any] | None = None, batch_size: int = 50
     ) -> None:
         """
         Upsert points into a collection from pubmed_dataset.json structure,
@@ -144,10 +147,14 @@ class AsyncQdrantVectorStore:
             if paper.get("abstract"):
                 total_words += len(paper["abstract"].split())
                 sampled_count += 1
-                if sampled_count >= estimate_bm25_avg_len_on_docs:
+                if sampled_count >= self.estimate_bm25_avg_len_on_x_docs:
                     break
-        avg_abstracts_len = total_words // sampled_count if sampled_count > 0 else 256
-        logger.info(f"📏 Estimated average abstract length, {avg_abstracts_len} words, for BM25 formula")
+        avg_abstracts_len = total_words // sampled_count if sampled_count == self.estimate_bm25_avg_len_on_x_docs else 256
+
+        if avg_abstracts_len is not None:
+            logger.info(f"📏 Estimated average abstract length, {avg_abstracts_len} words, for BM25 formula")
+        else:
+            logger.info("📏 Could not estimate average abstract length for BM25 formula, using default value of 256")    
 
         # Process papers in batches
         for i in range(0, len(papers), batch_size):

@@ -38,11 +38,11 @@ async def main() -> None:
     # --- Step 1: Retrieve semantic context from Qdrant ---
     qdrant_query = AsyncQdrantQuery()
     try:
-        documents = await qdrant_query.retrieve_documents_dense(question)
+        documents = await qdrant_query.retrieve_documents_hybrid(question)
         chunks = []
         for doc in documents:
             payload = doc.get("payload", {})
-            if isinstance(payload, dict) and "content" in payload: # which content? there's no key like this, is there
+            if isinstance(payload, dict) and "content" in payload: # which content? there's no key like this, is there?
                 chunks.append(str(payload["content"]))
             else:
                 chunks.append(str(payload))
