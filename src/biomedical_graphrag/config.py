@@ -36,7 +36,8 @@ class QdrantSettings(BaseModel):
     )
     embedding_dimension: int = Field(default=1536, description="Dimension of the OpenAI embedding model")
     estimate_bm25_avg_len_on_x_docs: int = Field(
-        default=300, description="Number of documents to sample for estimating average length of documents, used in BM25 formula"
+        default=300,
+        description="Number of documents to sample for estimating average length of documents, used in BM25 formula",
     )
     cloud_inference: bool = Field(
         default=False, description="Use Qdrant Cloud Inference for embeddings inference"

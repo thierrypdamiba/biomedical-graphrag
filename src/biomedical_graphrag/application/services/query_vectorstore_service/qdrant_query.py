@@ -52,8 +52,8 @@ class AsyncQdrantQuery:
             using="Dense",
             search_params=models.SearchParams(
                 quantization=models.QuantizationSearchParams(
-                    oversampling=3.0, # retrieve 3 * top_k quantized vectors
-                    rescore=True, # to rescore with original vectors
+                    oversampling=3.0,  # retrieve 3 * top_k quantized vectors
+                    rescore=True,  # to rescore with original vectors
                 )
             ),
             limit=top_k,
@@ -68,7 +68,7 @@ class AsyncQdrantQuery:
             for point in search_result.points
         ]
         return results
-    
+
     async def retrieve_documents_hybrid(self, question: str, top_k: int = 5) -> list[dict]:
         """
         Query the Qdrant vector search engine (async).
@@ -91,8 +91,8 @@ class AsyncQdrantQuery:
                     using="Dense",
                     params=models.SearchParams(
                         quantization=models.QuantizationSearchParams(
-                            oversampling=3.0, # retrieve 3 * top_k quantized vectors
-                            rescore=True # to rescore with original vectors
+                            oversampling=3.0,  # retrieve 3 * top_k quantized vectors
+                            rescore=True,  # to rescore with original vectors
                         )
                     ),
                     limit=top_k,
@@ -131,8 +131,7 @@ class AsyncQdrantQuery:
         context = QDRANT_GENERATION_PROMPT.format(
             question=question,
             context="\n".join(
-                f"Content: {doc['payload']}"
-                for doc in await self.retrieve_documents_hybrid(question)
+                f"Content: {doc['payload']}" for doc in await self.retrieve_documents_hybrid(question)
             ),
         )
         logger.debug(f"Qdrant context: {context}")

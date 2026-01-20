@@ -22,6 +22,8 @@ class TestQdrantIntegration:
             mock_settings.qdrant.api_key.get_secret_value.return_value = "test-key"
             mock_settings.qdrant.collection_name = "test_collection"
             mock_settings.qdrant.embedding_dimension = 1536
+            mock_settings.qdrant.estimate_bm25_avg_len_on_x_docs = 300
+            mock_settings.qdrant.cloud_inference = False
             mock_settings.openai.api_key.get_secret_value.return_value = "test-openai-key"
 
             with patch(
@@ -35,6 +37,8 @@ class TestQdrantIntegration:
                 assert vectorstore.url == "http://localhost:6333"
                 assert vectorstore.collection_name == "test_collection"
                 assert vectorstore.embedding_dimension == 1536
+                assert vectorstore.estimate_bm25_avg_len_on_x_docs == 300
+                assert vectorstore.cloud_inference is False
                 assert vectorstore.client == mock_client
 
                 await vectorstore.close()
@@ -123,6 +127,8 @@ class TestDatabaseConnectionSettings:
         assert qdrant_settings.collection_name == "biomedical_papers"
         assert qdrant_settings.embedding_model == "text-embedding-3-small"
         assert qdrant_settings.embedding_dimension == 1536
+        assert qdrant_settings.estimate_bm25_avg_len_on_x_docs == 300
+        assert qdrant_settings.cloud_inference is False
 
     def test_neo4j_settings_validation(self) -> None:
         """Test Neo4j settings validation."""

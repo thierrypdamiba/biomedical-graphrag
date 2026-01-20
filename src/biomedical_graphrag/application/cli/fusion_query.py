@@ -42,10 +42,7 @@ async def main() -> None:
         chunks = []
         for doc in documents:
             payload = doc.get("payload", {})
-            if isinstance(payload, dict) and "content" in payload: # which content? there's no key like this, is there?
-                chunks.append(str(payload["content"]))
-            else:
-                chunks.append(str(payload))
+            chunks.append(str(payload))
 
         # --- Step 2: Enrichment + Fusion summary (two-phase internally) ---
         answer = run_graph_enrichment_and_summarize(question, chunks)

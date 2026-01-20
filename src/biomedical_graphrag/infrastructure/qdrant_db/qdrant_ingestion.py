@@ -23,7 +23,9 @@ async def ingest_data(recreate: bool = False) -> None:
                 await vector_store.delete_collection()
                 await vector_store.create_collection()
         else:
-            logger.info(f"Collection with name {vector_store.collection_name} does not exist. Creating...")
+            logger.info(
+                f"Collection with name {vector_store.collection_name} does not exist. Creating..."
+            )
             await vector_store.create_collection()
 
         # Load datasets

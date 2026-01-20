@@ -5,12 +5,11 @@ from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import Batch, models
 
 from biomedical_graphrag.config import settings
-from biomedical_graphrag.domain.citation import CitationNetwork
+
+# from biomedical_graphrag.domain.citation import CitationNetwork
 from biomedical_graphrag.domain.gene import GeneRecord
 from biomedical_graphrag.domain.paper import Paper
 from biomedical_graphrag.utils.logger_util import setup_logging
-
-import uuid
 
 logger = setup_logging()
 
@@ -34,8 +33,9 @@ class AsyncQdrantVectorStore:
         self.openai_client = AsyncOpenAI(api_key=settings.openai.api_key.get_secret_value())
 
         self.client = AsyncQdrantClient(
-            url=self.url, api_key=self.api_key.get_secret_value() if self.api_key else None,
-            cloud_inference=self.cloud_inference
+            url=self.url,
+            api_key=self.api_key.get_secret_value() if self.api_key else None,
+            cloud_inference=self.cloud_inference,
         )
 
     async def close(self) -> None:
@@ -54,22 +54,16 @@ class AsyncQdrantVectorStore:
             collection_name=self.collection_name,
             vectors_config={
                 "Dense": models.VectorParams(
-                    size=self.embedding_dimension, 
+                    size=self.embedding_dimension,
                     distance=models.Distance.COSINE,
                     quantization_config=models.ScalarQuantization(
                         scalar=models.ScalarQuantizationConfig(
-                            type=models.ScalarType.INT8,
-                            quantile=0.99,
-                            always_ram=True
+                            type=models.ScalarType.INT8, quantile=0.99, always_ram=True
                         )
-                    )
+                    ),
                 )
             },
-            sparse_vectors_config={
-                "Lexical": models.SparseVectorParams(
-                    modifier=models.Modifier.IDF
-                )
-            },
+            sparse_vectors_config={"Lexical": models.SparseVectorParams(modifier=models.Modifier.IDF)},
         )
         logger.info(f"✅ Collection '{self.collection_name}' created successfully")
 
@@ -93,12 +87,10 @@ class AsyncQdrantVectorStore:
         """
         if self.cloud_inference:
             return models.Document(
-                    text=text, 
-                    model=f"openai/{settings.qdrant.embedding_model}", 
-                    options={
-                        "openai-api-key": settings.openai.api_key.get_secret_value()
-                    }
-                )
+                text=text,
+                model=f"openai/{settings.qdrant.embedding_model}",
+                options={"openai-api-key": settings.openai.api_key.get_secret_value()},
+            )
         else:
             try:
                 embedding = await self.openai_client.embeddings.create(
@@ -111,7 +103,7 @@ class AsyncQdrantVectorStore:
 
     def _define_bm25_vectors(self, text: str, avg_len: int = 256) -> models.Document:
         """
-        Wrap text in models.Document to handle BM25 sparse vectors inference 
+        Wrap text in models.Document to handle BM25 sparse vectors inference
         in Qdrant's core.
 
         Args:
@@ -121,13 +113,8 @@ class AsyncQdrantVectorStore:
                 models.Document: Document object.
         """
         return models.Document(
-                            text=text, 
-                            model="qdrant/bm25", 
-                            options={
-                                "avg_len": avg_len, 
-                                "language": "english"
-                            }
-                        )
+            text=text, model="qdrant/bm25", options={"avg_len": avg_len, "language": "english"}
+        )
 
     async def upsert_points(
         self, pubmed_data: dict[str, Any], gene_data: dict[str, Any] | None = None, batch_size: int = 50
@@ -141,7 +128,7 @@ class AsyncQdrantVectorStore:
             batch_size (int): Number of points to process in each batch.
         """
         papers = pubmed_data.get("papers", [])
-        citation_network_dict = pubmed_data.get("citation_network", {})
+        # citation_network_dict = pubmed_data.get("citation_network", {}) # pretty much meaningless for Qdrant, if having Neo4j & agent
 
         logger.info(f"📚 Starting ingestion of {len(papers)} papers with batch size {batch_size}")
 
@@ -168,12 +155,20 @@ class AsyncQdrantVectorStore:
                 sampled_count += 1
                 if sampled_count >= self.estimate_bm25_avg_len_on_x_docs:
                     break
-        avg_abstracts_len = total_words // sampled_count if sampled_count == self.estimate_bm25_avg_len_on_x_docs else 256
+        avg_abstracts_len = (
+            total_words // sampled_count
+            if sampled_count == self.estimate_bm25_avg_len_on_x_docs
+            else 256
+        )
 
         if avg_abstracts_len is not None:
-            logger.info(f"📏 Estimated average abstract length, {avg_abstracts_len} words, for BM25 formula")
+            logger.info(
+                f"📏 Estimated average abstract length, {avg_abstracts_len} words, for BM25 formula"
+            )
         else:
-            logger.info("📏 Could not estimate average abstract length for BM25 formula, using default value of 256")    
+            logger.info(
+                "📏 Could not estimate average abstract length for BM25 formula, using default value of 256"
+            )
 
         # Process papers in batches
         for i in range(0, len(papers), batch_size):
@@ -203,7 +198,7 @@ class AsyncQdrantVectorStore:
                     batch_skipped += 1
                     logger.info(
                         f"⚠️ Skipping paper {pmid or 'unknown'} due to missing fields:"
-                        f"Abstract: {not(bool(abstract))}, PMID: {not(bool(pmid))}"
+                        f"Abstract: {not (bool(abstract))}, PMID: {not (bool(pmid))}"
                     )
                     continue
 
@@ -212,8 +207,8 @@ class AsyncQdrantVectorStore:
                     sparse_vector = self._define_bm25_vectors(abstract, avg_len=avg_abstracts_len)
 
                     # Get citation network for this paper if available
-                    citation_info = citation_network_dict.get(pmid, {})
-                    citation_network = CitationNetwork(**citation_info) if citation_info else None
+                    # citation_info = citation_network_dict.get(pmid, {})
+                    # citation_network = CitationNetwork(**citation_info) if citation_info else None
 
                     paper_model = Paper(
                         pmid=pmid,
@@ -228,7 +223,7 @@ class AsyncQdrantVectorStore:
 
                     payload = {
                         "paper": paper_model.model_dump(),
-                        "citation_network": citation_network.model_dump() if citation_network else None,
+                        # "citation_network": citation_network.model_dump() if citation_network else None,
                         "genes": [g.model_dump() for g in pmid_to_genes.get(pmid, [])],
                     }
 
@@ -250,8 +245,7 @@ class AsyncQdrantVectorStore:
                         points=Batch(
                             ids=batch_ids,
                             payloads=batch_payloads,
-                            vectors={"Dense": batch_dense_vectors,
-                                     "Lexical": batch_sparse_vectors},
+                            vectors={"Dense": batch_dense_vectors, "Lexical": batch_sparse_vectors},
                         ),
                     )
                     total_processed += len(batch_ids)

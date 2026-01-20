@@ -75,9 +75,7 @@ async def create_graph(
 
     dataset.papers = valid_papers
 
-    logger.info(
-        f"Loaded {len(dataset.papers)} papers"
-    )
+    logger.info(f"Loaded {len(dataset.papers)} papers")
 
     # Load gene dataset (optional)
     gene_dataset: GeneDataset | None = None

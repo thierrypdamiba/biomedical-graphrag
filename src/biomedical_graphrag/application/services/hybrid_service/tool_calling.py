@@ -42,10 +42,10 @@ def run_graph_enrichment(question: str, qdrant_chunks: list[str]) -> dict[str, A
         The Neo4j results.
     """
     schema = get_neo4j_schema()
-    logger.info(f"Neo4j schema: {schema}")
     neo4j = Neo4jGraphQuery()
 
     prompt = HYBRID_PROMPT.format(schema=schema, question=question, chunks="---".join(qdrant_chunks))
+    logger.info(f"Prompt for tool selection based on question and Qdrant retrieval:\n{prompt}")
 
     response = openai_client.responses.create(  # type: ignore[call-overload]
         model=settings.openai.model,
