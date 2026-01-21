@@ -61,7 +61,7 @@ def mock_qdrant_client() -> AsyncMock:
     """Create a mock Qdrant client for testing."""
     mock_client = AsyncMock()
     # Set up common async methods
-    for method in ['create_collection', 'delete_collection', 'upsert', 'search', 'close']:
+    for method in ["create_collection", "delete_collection", "upsert", "search", "close"]:
         setattr(mock_client, method, AsyncMock())
     return mock_client
 
@@ -77,7 +77,7 @@ def mock_neo4j_driver() -> AsyncMock:
     mock_driver.session.return_value.__aexit__.return_value = None
 
     # Set up async methods
-    for method in ['close']:
+    for method in ["close"]:
         setattr(mock_driver, method, AsyncMock())
 
     return mock_driver
@@ -89,7 +89,7 @@ def mock_qdrant_vectorstore(mock_qdrant_client: AsyncMock) -> Mock:
     mock_vectorstore = Mock()
     mock_vectorstore.client = mock_qdrant_client
     # Set up async methods
-    for method in ['create_collection', 'close']:
+    for method in ["create_collection", "close"]:
         setattr(mock_vectorstore, method, AsyncMock())
     return mock_vectorstore
 
@@ -100,7 +100,7 @@ def mock_neo4j_client(mock_neo4j_driver: AsyncMock) -> AsyncMock:
     mock_client = AsyncMock(spec=AsyncNeo4jClient)
     mock_client.driver = mock_neo4j_driver
     # Set up async methods
-    for method in ['execute', 'create_graph', 'close']:
+    for method in ["execute", "create_graph", "close"]:
         setattr(mock_client, method, AsyncMock())
     return mock_client
 

@@ -66,7 +66,8 @@ async def create_graph(
     # Load dataset
     logger.info(f"Loading paper dataset from {dataset_path}...")
     dataset = load_paper_dataset(dataset_path)
-    logger.info(f"Loaded {len(dataset.papers)} papers with {len(dataset.citation_network)} citations")
+
+    logger.info(f"Loaded {len(dataset.papers)} papers")
 
     # Load gene dataset (optional)
     gene_dataset: GeneDataset | None = None

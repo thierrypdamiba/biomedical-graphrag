@@ -43,15 +43,15 @@
 
 ## Overview
 
-A comprehensive GraphRAG (Graph Retrieval-Augmented Generation) system designed for biomedical research. It combines knowledge graphs with vector search to provide intelligent querying and analysis of biomedical literature and genomic data.
+A comprehensive GraphRAG (Graph Retrieval-Augmented Generation) system designed for biomedical research. It combines knowledge graphs with vector search engine to provide intelligent querying and analysis of biomedical literature and genomic data.
 
 Article: [Building a Biomedical GraphRAG: When Knowledge Graphs Meet Vector Search](https://aiechoes.substack.com/p/building-a-biomedical-graphrag-when)
 
 **Key Features:**
 
-- **Hybrid Query System**: Combines Neo4j graph database with Qdrant vector search for comprehensive biomedical insights
+- **Hybrid Query System**: Combines Neo4j graph database with Qdrant vector search engine for comprehensive biomedical insights
 - **Data Integration**: Processes PubMed papers, gene data, and research citations
-- **Intelligent Querying**: Uses LLM-powered tool selection for graph enrichment and semantic search
+- **Intelligent Querying**: Uses LLM-powered tool selection for graph enrichment and hybrid (semantic + lexical) search
 - **Biomedical Schema**: Specialized graph schema for papers, authors, institutions, genes, and MeSH terms
 - **Async Processing**: High-performance async data collection and processing
 
@@ -88,7 +88,7 @@ biomedical-graphrag-pipeline/
 | [Python 3.13+](https://www.python.org/downloads/)      | Programming language                    |
 | [uv](https://docs.astral.sh/uv/)                       | Package and dependency manager          |
 | [Neo4j](https://neo4j.com/)                            | Graph database for knowledge graphs     |
-| [Qdrant](https://qdrant.tech/)                         | Vector database for embeddings          |
+| [Qdrant](https://qdrant.tech/)                         | Vector search engine for embeddings     |
 | [OpenAI](https://openai.com/)                          | LLM provider for queries and embeddings |
 | [PubMed](https://www.ncbi.nlm.nih.gov/books/NBK25501/) | Biomedical literature database          |
 
@@ -116,7 +116,7 @@ biomedical-graphrag-pipeline/
 1. Install the required packages:
 
    ```bash
-   uv sync --all-groups --all-extra
+  uv sync --all-groups --all-extras
    ```
 
 1. Create a `.env` file in the root directory:
@@ -148,8 +148,11 @@ NEO4J__DATABASE=neo4j
 QDRANT__URL=http://localhost:6333
 QDRANT__API_KEY=your_qdrant_api_key
 QDRANT__COLLECTION_NAME=biomedical_papers
-QDRANT__EMBEDDING_MODEL=text-embedding-3-small
+QDRANT__EMBEDDING_MODEL=text-embedding-3-large
 QDRANT__EMBEDDING_DIMENSION=1536
+QDRANT__RERANKER_EMBEDDING_DIMENSION=3072
+QDRANT__ESTIMATE_BM25_AVG_LEN_ON_X_DOCS=300
+QDRANT__CLOUD_INFERENCE=false
 
 # PubMed Configuration (optional)
 PUBMED__EMAIL=your_email@example.com
@@ -186,7 +189,7 @@ make create-graph
 make delete-graph
 ```
 
-#### Qdrant Vector Database
+#### Qdrant Vector Search Engine
 
 ```bash
 # Create vector collection for embeddings
@@ -198,6 +201,18 @@ make ingest-qdrant-data
 # Delete vector collection
 make delete-qdrant-collection
 ```
+
+Notes:
+
+- Embeddings are built from **PubMed paper abstracts**.
+- This project uses OpenAI eembeddings **Matryoshka Representation Learning (MRL)** feature:
+  - `QDRANT__EMBEDDING_DIMENSION` is the prefix dimension used for **retrieval** (stored in Qdrant as the `Dense` vector).
+  - `QDRANT__RERANKER_EMBEDDING_DIMENSION` is the (larger) prefix dimension used for **reranking** (stored in Qdrant as the `Reranker` vector).
+- `make ingest-qdrant-data` currently recreates the collection each run (see `qdrant_ingestion.py`).
+  If you want incremental ingestion, change `recreate=True` to `False`.
+- The collection is configured by default with **scalar quantization** (compressed dense vectors).
+- `QDRANT__CLOUD_INFERENCE=true` enables **Qdrant Cloud Inference** when embeddings are computed by Qdrant Cloud.
+- `QDRANT__ESTIMATE_BM25_AVG_LEN_ON_X_DOCS` controls how many documents are sampled to estimate the average abstract length used by **BM25**. This helps calibrate BM25-based scoring when using dense+BM25 hybrid retrieval.
 
 ### Query Commands
 
@@ -211,7 +226,7 @@ make custom-qdrant-query QUESTION="Which institutions have collaborated most fre
 uv run src/biomedical_graphrag/application/cli/query_vectorstore.py --ask "Which institutions have collaborated most frequently on papers about 'Gene Editing' and 'Immunotherapy'?"
 ```
 
-#### Hybrid Neo4j + Qdrant Queries
+#### Hybrid Neo4j + Qdrant Hybrid (Dense + BM25) Queries
 
 ```bash
 # Run example queries on the Neo4j graph using GraphRAG
@@ -220,7 +235,7 @@ make example-graph-query
 # Run a custom natural language query using hybrid GraphRAG
 make custom-graph-query QUESTION="What are the latest research trends in cancer immunotherapy?"
 
-# Or run directly with the CLI
+# Or run directly with the CLI (positional args)
 uv run src/biomedical_graphrag/application/cli/fusion_query.py "What are the latest research trends in cancer immunotherapy?"
 ```
 
@@ -228,13 +243,12 @@ uv run src/biomedical_graphrag/application/cli/fusion_query.py "What are the lat
 
 **Qdrant Queries:**
 
-- Semantic search across paper abstracts and content
-- Similarity-based retrieval using embeddings
-- Direct vector similarity queries
+- Hybrid (semantic + lexical) search across paper abstracts and content
+- Similarity-based retrieval using embeddings and BM25 fusion
 
 **Hybrid Queries:**
 
-- Combines semantic search (Qdrant) with graph enrichment (Neo4j):
+- Combines vector search engine (Qdrant) with graph enrichment (Neo4j):
   - Author collaboration networks
   - Citation analysis and paper relationships
   - Gene-paper associations
@@ -262,6 +276,19 @@ uv run src/biomedical_graphrag/application/cli/fusion_query.py "What are the lat
 - What genes appear together with HIF1A in cancer research?
 
 - Which genes are frequently co-mentioned with TP53?
+
+### Troubleshooting
+
+- **Make fails immediately with ".env file is missing"**
+  - Create it with `cp env.example .env` and fill in required values.
+
+- **Qdrant ingestion/query fails**
+  - Confirm Qdrant is running and `QDRANT__URL` points to it.
+  - If you changed embedding model, recreate the collection.
+
+- **Hybrid queries return errors about Neo4j**
+  - Make sure Neo4j is running and credentials in `NEO4J__*` are correct.
+  - Ensure the graph exists (`make create-graph`) before asking graph enrichment questions.
 
 ### Testing
 

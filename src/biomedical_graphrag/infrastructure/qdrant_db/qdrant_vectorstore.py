@@ -5,7 +5,8 @@ from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import Batch, models
 
 from biomedical_graphrag.config import settings
-from biomedical_graphrag.domain.citation import CitationNetwork
+
+# from biomedical_graphrag.domain.citation import CitationNetwork
 from biomedical_graphrag.domain.gene import GeneRecord
 from biomedical_graphrag.domain.paper import Paper
 from biomedical_graphrag.utils.logger_util import setup_logging
@@ -26,11 +27,16 @@ class AsyncQdrantVectorStore:
         self.api_key = settings.qdrant.api_key
         self.collection_name = settings.qdrant.collection_name
         self.embedding_dimension = settings.qdrant.embedding_dimension
+        self.reranker_embedding_dimension = settings.qdrant.reranker_embedding_dimension
+        self.estimate_bm25_avg_len_on_x_docs = settings.qdrant.estimate_bm25_avg_len_on_x_docs
+        self.cloud_inference = settings.qdrant.cloud_inference
 
         self.openai_client = AsyncOpenAI(api_key=settings.openai.api_key.get_secret_value())
 
         self.client = AsyncQdrantClient(
-            url=self.url, api_key=self.api_key.get_secret_value() if self.api_key else None
+            url=self.url,
+            api_key=self.api_key.get_secret_value() if self.api_key else None,
+            cloud_inference=self.cloud_inference,
         )
 
     async def close(self) -> None:
@@ -39,7 +45,8 @@ class AsyncQdrantVectorStore:
 
     async def create_collection(self) -> None:
         """
-        Create a new collection in Qdrant (async).
+        Create a new collection in Qdrant (async) for hybrid search with MRL-based reranking
+        Retriever's embeddings are quantized using scalar quantization.
         Args:
                 collection_name (str): Name of the collection.
                 kwargs: Additional parameters for collection creation.
@@ -49,9 +56,22 @@ class AsyncQdrantVectorStore:
             collection_name=self.collection_name,
             vectors_config={
                 "Dense": models.VectorParams(
-                    size=self.embedding_dimension, distance=models.Distance.COSINE
-                )
+                    size=self.embedding_dimension,
+                    distance=models.Distance.COSINE,
+                    quantization_config=models.ScalarQuantization(
+                        scalar=models.ScalarQuantizationConfig(
+                            type=models.ScalarType.INT8, quantile=0.99, always_ram=True
+                        )
+                    ),
+                ),
+                "Reranker": models.VectorParams(
+                    size=self.reranker_embedding_dimension,
+                    distance=models.Distance.COSINE,
+                    on_disk=True,
+                    hnsw_config=models.HnswConfigDiff(m=0),
+                ),
             },
+            sparse_vectors_config={"Lexical": models.SparseVectorParams(modifier=models.Modifier.IDF)},
         )
         logger.info(f"✅ Collection '{self.collection_name}' created successfully")
 
@@ -65,22 +85,48 @@ class AsyncQdrantVectorStore:
         await self.client.delete_collection(collection_name=self.collection_name)
         logger.info(f"✅ Collection '{self.collection_name}' deleted successfully")
 
-    async def _dense_vectors(self, text: str) -> list[float]:
+    async def _get_openai_vectors(self, text: str, dimensions: int = 1536) -> models.Vector:
         """
         Get the embedding vector for the given text (async).
         Args:
                 text (str): Input text to embed.
+                dimensions (int): Number of dimensions to return from the embedding. https://platform.openai.com/docs/api-reference/embeddings/create#embeddings-create-dimensions
         Returns:
                 list[float]: The embedding vector.
         """
-        try:
-            embedding = await self.openai_client.embeddings.create(
-                model=settings.qdrant.embedding_model, input=text
+        if self.cloud_inference:
+            return models.Document(
+                text=text,
+                model=f"openai/{settings.qdrant.embedding_model}",
+                options={
+                    "openai-api-key": settings.openai.api_key.get_secret_value(),
+                    "dimensions": dimensions,
+                },
             )
-            return embedding.data[0].embedding
-        except Exception as e:
-            logger.error(f"❌ Failed to create embedding: {e}")
-            raise
+        else:
+            try:
+                embedding = await self.openai_client.embeddings.create(
+                    model=settings.qdrant.embedding_model, input=text, dimensions=dimensions
+                )
+                return embedding.data[0].embedding
+            except Exception as e:
+                logger.error(f"❌ Failed to create embedding: {e}")
+                raise
+
+    def _define_bm25_vectors(self, text: str, avg_len: int = 256) -> models.Document:
+        """
+        Wrap text in models.Document to handle BM25 sparse vectors inference
+        in Qdrant's core.
+
+        Args:
+                text (str): Input text.
+                avg_len (int): Average document length estimation for BM25 formula.
+        Returns:
+                models.Document: Document object.
+        """
+        return models.Document(
+            text=text, model="qdrant/bm25", options={"avg_len": avg_len, "language": "english"}
+        )
 
     async def upsert_points(
         self, pubmed_data: dict[str, Any], gene_data: dict[str, Any] | None = None, batch_size: int = 50
@@ -94,7 +140,7 @@ class AsyncQdrantVectorStore:
             batch_size (int): Number of points to process in each batch.
         """
         papers = pubmed_data.get("papers", [])
-        citation_network_dict = pubmed_data.get("citation_network", {})
+        # citation_network_dict = pubmed_data.get("citation_network", {}) # pretty much meaningless for Qdrant, if having Neo4j & agent
 
         logger.info(f"📚 Starting ingestion of {len(papers)} papers with batch size {batch_size}")
 
@@ -112,6 +158,30 @@ class AsyncQdrantVectorStore:
         total_processed = 0
         total_skipped = 0
 
+        # Estimate average abstract length for BM25
+        total_words = 0
+        sampled_count = 0
+        for paper in papers:
+            if paper.get("abstract"):
+                total_words += len(paper["abstract"].split())
+                sampled_count += 1
+                if sampled_count >= self.estimate_bm25_avg_len_on_x_docs:
+                    break
+        avg_abstracts_len = (
+            total_words // sampled_count
+            if sampled_count == self.estimate_bm25_avg_len_on_x_docs
+            else 256
+        )
+
+        if avg_abstracts_len is not None:
+            logger.info(
+                f"📏 Estimated average abstract length, {avg_abstracts_len} words, for BM25 formula"
+            )
+        else:
+            logger.info(
+                "📏 Could not estimate average abstract length for BM25 formula, using default value of 256"
+            )
+
         # Process papers in batches
         for i in range(0, len(papers), batch_size):
             batch_papers = papers[i : i + batch_size]
@@ -122,7 +192,9 @@ class AsyncQdrantVectorStore:
 
             batch_ids = []
             batch_payloads = []
-            batch_vectors = []
+            batch_retriever_vectors = []
+            batch_reranker_vectors = []
+            batch_sparse_vectors = []
             batch_skipped = 0
 
             for paper in batch_papers:
@@ -135,16 +207,27 @@ class AsyncQdrantVectorStore:
                 authors = paper.get("authors", [])
                 mesh_terms = paper.get("mesh_terms", [])
 
-                if not title or not abstract or not pmid:
+                if not abstract or not pmid:
                     batch_skipped += 1
-                    continue  # skip incomplete papers
+                    logger.info(
+                        f"⚠️ Skipping paper {pmid or 'unknown'} due to missing fields:"
+                        f"Abstract: {not (bool(abstract))}, PMID: {not (bool(pmid))}"
+                    )
+                    continue
 
                 try:
-                    vector = await self._dense_vectors(abstract)
+                    retriever_vector = await self._get_openai_vectors(
+                        abstract, dimensions=self.embedding_dimension
+                    )  # MRL, https://platform.openai.com/docs/guides/embeddings#use-cases
+                    reranker_vector = await self._get_openai_vectors(
+                        abstract, dimensions=self.reranker_embedding_dimension
+                    )
+
+                    sparse_vector = self._define_bm25_vectors(abstract, avg_len=avg_abstracts_len)
 
                     # Get citation network for this paper if available
-                    citation_info = citation_network_dict.get(pmid, {})
-                    citation_network = CitationNetwork(**citation_info) if citation_info else None
+                    # citation_info = citation_network_dict.get(pmid, {})
+                    # citation_network = CitationNetwork(**citation_info) if citation_info else None
 
                     paper_model = Paper(
                         pmid=pmid,
@@ -159,13 +242,15 @@ class AsyncQdrantVectorStore:
 
                     payload = {
                         "paper": paper_model.model_dump(),
-                        "citation_network": citation_network.model_dump() if citation_network else None,
+                        # "citation_network": citation_network.model_dump() if citation_network else None,
                         "genes": [g.model_dump() for g in pmid_to_genes.get(pmid, [])],
                     }
 
                     batch_ids.append(int(pmid))
                     batch_payloads.append(payload)
-                    batch_vectors.append(vector)
+                    batch_retriever_vectors.append(retriever_vector)
+                    batch_reranker_vectors.append(reranker_vector)
+                    batch_sparse_vectors.append(sparse_vector)
 
                 except Exception as e:
                     logger.error(f"❌ Failed to process paper {pmid}: {e}")
@@ -178,9 +263,13 @@ class AsyncQdrantVectorStore:
                     await self.client.upsert(
                         collection_name=self.collection_name,
                         points=Batch(
-                            ids=[str(i) for i in batch_ids],
+                            ids=batch_ids,
                             payloads=batch_payloads,
-                            vectors={"Dense": [list(v) for v in batch_vectors]},
+                            vectors={
+                                "Dense": batch_retriever_vectors,
+                                "Reranker": batch_reranker_vectors,
+                                "Lexical": batch_sparse_vectors,
+                            },
                         ),
                     )
                     total_processed += len(batch_ids)

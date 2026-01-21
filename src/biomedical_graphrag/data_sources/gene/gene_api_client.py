@@ -74,8 +74,7 @@ class GeneAPIClient:
                                     )
                         break
                     await asyncio.sleep(
-                        base_backoff * (2 ** (attempt - 1))
-                        + random.SystemRandom().uniform(0, 0.4)
+                        base_backoff * (2 ** (attempt - 1)) + random.SystemRandom().uniform(0, 0.4)
                     )
 
             for r in record:

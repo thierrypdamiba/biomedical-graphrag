@@ -22,8 +22,11 @@ def test_settings_creation_with_defaults() -> None:
     qdrant_settings = QdrantSettings()
     assert qdrant_settings.url == "http://localhost:6333"
     assert qdrant_settings.collection_name == "biomedical_papers"
-    assert qdrant_settings.embedding_model == "text-embedding-3-small"
+    assert qdrant_settings.embedding_model == "text-embedding-3-large"
     assert qdrant_settings.embedding_dimension == 1536
+    assert qdrant_settings.reranker_embedding_dimension == 3072
+    assert qdrant_settings.estimate_bm25_avg_len_on_x_docs == 300
+    assert qdrant_settings.cloud_inference is False
 
 
 def test_settings_with_environment_variables() -> None:
@@ -35,6 +38,7 @@ def test_settings_with_environment_variables() -> None:
             "OPENAI__MODEL": "gpt-4",
             "NEO4J__URI": "bolt://test:7687",
             "QDRANT__URL": "http://test:6333",
+            "QDRANT__CLOUD_INFERENCE": "true",
         },
     ):
         settings = Settings()
@@ -43,6 +47,7 @@ def test_settings_with_environment_variables() -> None:
         assert settings.openai.model == "gpt-4"
         assert settings.neo4j.uri == "bolt://test:7687"
         assert settings.qdrant.url == "http://test:6333"
+        assert settings.qdrant.cloud_inference is True
 
 
 def test_openai_settings_validation() -> None:
@@ -71,6 +76,9 @@ def test_qdrant_settings_validation() -> None:
 
     assert qdrant_settings.url == "http://localhost:6333"
     assert qdrant_settings.collection_name == "biomedical_papers"
-    assert qdrant_settings.embedding_model == "text-embedding-3-small"
+    assert qdrant_settings.embedding_model == "text-embedding-3-large"
     assert qdrant_settings.embedding_dimension == 1536
+    assert qdrant_settings.reranker_embedding_dimension == 3072
+    assert qdrant_settings.estimate_bm25_avg_len_on_x_docs == 300
+    assert qdrant_settings.cloud_inference is False
     assert qdrant_settings.api_key.get_secret_value() == ""

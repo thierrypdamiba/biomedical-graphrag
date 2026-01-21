@@ -16,15 +16,16 @@ async def ingest_data(recreate: bool = False) -> None:
 
     vector_store = AsyncQdrantVectorStore()
     try:
-        if recreate:
-            logger.info("🔄 Recreating collection...")
-            # recreate collection to ensure clean schema/state
-            try:
+        if await vector_store.client.collection_exists(vector_store.collection_name):
+            if recreate:
+                logger.info("🔄 Recreating collection...")
+                # recreate collection to ensure clean schema/state
                 await vector_store.delete_collection()
-            except Exception:
-                # ignore if not existing
-                logger.debug("Collection didn't exist, skipping deletion")
-                pass
+                await vector_store.create_collection()
+        else:
+            logger.info(
+                f"Collection with name {vector_store.collection_name} does not exist. Creating..."
+            )
             await vector_store.create_collection()
 
         # Load datasets

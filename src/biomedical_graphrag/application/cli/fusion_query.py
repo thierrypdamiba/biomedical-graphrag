@@ -38,14 +38,11 @@ async def main() -> None:
     # --- Step 1: Retrieve semantic context from Qdrant ---
     qdrant_query = AsyncQdrantQuery()
     try:
-        documents = await qdrant_query.retrieve_documents(question)
+        documents = await qdrant_query.retrieve_documents_hybrid(question)
         chunks = []
         for doc in documents:
             payload = doc.get("payload", {})
-            if isinstance(payload, dict) and "content" in payload:
-                chunks.append(str(payload["content"]))
-            else:
-                chunks.append(str(payload))
+            chunks.append(str(payload))
 
         # --- Step 2: Enrichment + Fusion summary (two-phase internally) ---
         answer = run_graph_enrichment_and_summarize(question, chunks)
