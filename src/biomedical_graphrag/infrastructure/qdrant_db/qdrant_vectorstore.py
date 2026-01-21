@@ -85,33 +85,43 @@ class AsyncQdrantVectorStore:
         await self.client.delete_collection(collection_name=self.collection_name)
         logger.info(f"✅ Collection '{self.collection_name}' deleted successfully")
 
-    async def _get_openai_vectors(self, text: str, dimensions: int = 1536) -> models.Vector:
+    async def _get_openai_vectors(self, text: str, dimensions: int) -> list[float]:
         """
         Get the embedding vector for the given text (async).
         Args:
                 text (str): Input text to embed.
-                dimensions (int): Number of dimensions to return from the embedding. https://platform.openai.com/docs/api-reference/embeddings/create#embeddings-create-dimensions
+                dimensions (int): Number of dimensions for the embedding. https://platform.openai.com/docs/api-reference/embeddings/create#embeddings-create-dimensions
         Returns:
                 list[float]: The embedding vector.
         """
-        if self.cloud_inference:
-            return models.Document(
-                text=text,
-                model=f"openai/{settings.qdrant.embedding_model}",
-                options={
-                    "openai-api-key": settings.openai.api_key.get_secret_value(),
-                    "dimensions": dimensions,
-                },
+        try:
+            embedding = await self.openai_client.embeddings.create(
+                model=settings.qdrant.embedding_model, input=text, dimensions=dimensions
             )
-        else:
-            try:
-                embedding = await self.openai_client.embeddings.create(
-                    model=settings.qdrant.embedding_model, input=text, dimensions=dimensions
-                )
-                return embedding.data[0].embedding
-            except Exception as e:
-                logger.error(f"❌ Failed to create embedding: {e}")
-                raise
+            return embedding.data[0].embedding
+        except Exception as e:
+            logger.error(f"❌ Failed to create embedding: {e}")
+            raise
+
+    def _define_openai_vectors(self, text: str, dimensions: int = 1536) -> models.Document:
+        """
+        Wrap text in models.Document to handle OpenAI embeddings inference
+        through Qdrant's Cloud.
+
+        Args:
+                text (str): Input text.
+                dimensions (int): Number of dimensions for the embedding. https://platform.openai.com/docs/api-reference/embeddings/create#embeddings-create-dimensions
+        Returns:
+                models.Document: Document object.
+        """
+        return models.Document(
+            text=text,
+            model=f"openai/{settings.qdrant.embedding_model}",
+            options={
+                "openai-api-key": settings.openai.api_key.get_secret_value(),
+                "dimensions": dimensions,
+            },
+        )
 
     def _define_bm25_vectors(self, text: str, avg_len: int = 256) -> models.Document:
         """
@@ -169,15 +179,16 @@ class AsyncQdrantVectorStore:
                     break
         avg_abstracts_len = (
             total_words // sampled_count
-            if sampled_count == self.estimate_bm25_avg_len_on_x_docs
-            else 256
+            if sampled_count > 0
+            else None
         )
 
         if avg_abstracts_len is not None:
             logger.info(
-                f"📏 Estimated average abstract length, {avg_abstracts_len} words, for BM25 formula"
+                f"📏 Estimated average abstract length for BM25 formula on {sampled_count} abstracts: {avg_abstracts_len} words"
             )
         else:
+            avg_abstracts_len = 256
             logger.info(
                 "📏 Could not estimate average abstract length for BM25 formula, using default value of 256"
             )
@@ -216,13 +227,18 @@ class AsyncQdrantVectorStore:
                     continue
 
                 try:
-                    retriever_vector = await self._get_openai_vectors(
-                        abstract, dimensions=self.embedding_dimension
-                    )  # MRL, https://platform.openai.com/docs/guides/embeddings#use-cases
-                    reranker_vector = await self._get_openai_vectors(
-                        abstract, dimensions=self.reranker_embedding_dimension
-                    )
-
+                    if self.cloud_inference:
+                        retriever_vector = self._define_openai_vectors(
+                            abstract, dimensions=self.embedding_dimension
+                        )
+                        reranker_vector = self._define_openai_vectors(
+                            abstract, dimensions=self.reranker_embedding_dimension
+                        )
+                    else:
+                        openai_vector = await self._get_openai_vectors(abstract, dimensions=self.reranker_embedding_dimension)  # MRL, https://platform.openai.com/docs/guides/embeddings#use-cases
+                        retriever_vector = openai_vector[:self.embedding_dimension] # Qdrant normalizes vectors used with COSINE automatically on upsert/query 
+                        reranker_vector = openai_vector #reranking vector is more precise, hence, has more dimensions
+                        
                     sparse_vector = self._define_bm25_vectors(abstract, avg_len=avg_abstracts_len)
 
                     # Get citation network for this paper if available
