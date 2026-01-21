@@ -85,6 +85,36 @@ class AsyncQdrantVectorStore:
         await self.client.delete_collection(collection_name=self.collection_name)
         logger.info(f"✅ Collection '{self.collection_name}' deleted successfully")
 
+    async def get_existing_ids(self) -> set[int]:
+        """
+        Get all existing point IDs from the collection.
+        Returns:
+            set[int]: Set of existing point IDs (PMIDs).
+        """
+        existing_ids: set[int] = set()
+        offset = None
+        batch_size = 1000
+
+        while True:
+            result = await self.client.scroll(
+                collection_name=self.collection_name,
+                limit=batch_size,
+                offset=offset,
+                with_payload=False,
+                with_vectors=False,
+            )
+            points, next_offset = result
+
+            for point in points:
+                existing_ids.add(point.id)
+
+            if next_offset is None:
+                break
+            offset = next_offset
+
+        logger.info(f"Found {len(existing_ids)} existing points in collection")
+        return existing_ids
+
     async def _get_openai_vectors(self, text: str, dimensions: int = 1536) -> models.Vector:
         """
         Get the embedding vector for the given text (async).
