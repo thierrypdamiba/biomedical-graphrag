@@ -45,7 +45,10 @@ class AsyncQdrantQuery:
         Returns:
             List of dictionaries containing the top_k similar documents.
         """
-        dense_vector = await self.qdrant_client._get_openai_vectors(question)
+        if self.cloud_inference:
+            dense_vector = self.qdrant_client._define_openai_vectors(question, dimensions=self.embedding_dimension)
+        else:
+            dense_vector = await self.qdrant_client._get_openai_vectors(question, dimensions=self.embedding_dimension)
 
         search_result = await self.qdrant_client.client.query_points(
             collection_name=self.collection_name,
@@ -81,12 +84,20 @@ class AsyncQdrantQuery:
         Returns:
             List of dictionaries containing the top_k similar documents.
         """
-        retriever_vector = await self.qdrant_client._get_openai_vectors(
-            question, dimensions=self.embedding_dimension
-        )
-        reranker_vector = await self.qdrant_client._get_openai_vectors(
-            question, dimensions=self.reranker_embedding_dimension
-        )
+        if self.cloud_inference:
+            retriever_vector = self.qdrant_client._define_openai_vectors(
+                question, dimensions=self.embedding_dimension
+            )
+            reranker_vector = self.qdrant_client._define_openai_vectors(
+                question, dimensions=self.reranker_embedding_dimension
+            )
+        else:
+            openai_vector = await self.qdrant_client._get_openai_vectors(
+                question, dimensions=self.reranker_embedding_dimension
+            )
+            retriever_vector = openai_vector[:self.embedding_dimension] # Qdrant normalizes vectors used with COSINE automatically on upsert/query
+            reranker_vector = openai_vector # full precision for reranking
+
         sparse_vector = self.qdrant_client._define_bm25_vectors(question)
 
         search_result = await self.qdrant_client.client.query_points(
