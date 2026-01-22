@@ -1,6 +1,6 @@
 """
 CLI for hybrid GraphRAG querying:
-1. Retrieve relevant chunks from Qdrant.
+1. Retrieve relevant papers from Qdrant based on the tool selected.
 2. Use LLM to select and run Neo4j enrichment tools.
 3. Fuse both sources into one concise biomedical summary.
 """
@@ -9,10 +9,7 @@ import asyncio
 import sys
 
 from biomedical_graphrag.application.services.hybrid_service.tool_calling import (
-    run_graph_enrichment_and_summarize,
-)
-from biomedical_graphrag.application.services.query_vectorstore_service.qdrant_query import (
-    AsyncQdrantQuery,
+    run_tools_sequence_and_summarize,
 )
 from biomedical_graphrag.utils.logger_util import setup_logging
 
@@ -35,22 +32,14 @@ async def main() -> None:
 
     logger.info(f"Processing question: {question}")
 
-    # --- Step 1: Retrieve semantic context from Qdrant ---
-    qdrant_query = AsyncQdrantQuery()
     try:
-        documents = await qdrant_query.retrieve_documents_hybrid(question)
-        chunks = []
-        for doc in documents:
-            payload = doc.get("payload", {})
-            chunks.append(str(payload))
-
-        # --- Step 2: Enrichment + Fusion summary (two-phase internally) ---
-        answer = run_graph_enrichment_and_summarize(question, chunks)
+        answer = await run_tools_sequence_and_summarize(question) #TO DO: fix async
 
         print("\n=== Unified Biomedical Answer ===\n")
         print(answer)
-    finally:
-        await qdrant_query.close()
+    except Exception as e:
+        logger.error(f"Error during query processing: {e}")
+        raise
 
 
 if __name__ == "__main__":

@@ -95,7 +95,7 @@ class AsyncQdrantVectorStore:
                 list[float]: The embedding vector.
         """
         try:
-            embedding = await self.openai_client.embeddings.create(
+            embedding = await self.openai_client.embeddings.create( #TBD: redo to batches
                 model=settings.qdrant.embedding_model, input=text, dimensions=dimensions
             )
             return embedding.data[0].embedding

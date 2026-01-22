@@ -20,6 +20,10 @@ class Neo4jGraphQuery:
         self.password = settings.neo4j.password.get_secret_value()
         self.driver = GraphDatabase.driver(self.uri, auth=(self.username, self.password))
 
+    def close(self) -> None:
+        """Close the Neo4j driver and release underlying connections."""
+        self.driver.close()
+
     def query(self, cypher: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         """
         Execute a raw Cypher query against the graph.
