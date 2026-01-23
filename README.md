@@ -238,7 +238,7 @@ make custom-qdrant-query QUESTION="Which institutions have collaborated most fre
 uv run src/biomedical_graphrag/application/cli/query_vectorstore.py --ask "Which institutions have collaborated most frequently on papers about 'Gene Editing' and 'Immunotherapy'?"
 ```
 
-#### Hybrid Neo4j + Qdrant Hybrid (Dense + BM25) Queries
+#### Hybrid Neo4j + Qdrant Queries
 
 ```bash
 # Run example queries on the Neo4j graph using GraphRAG
@@ -255,7 +255,7 @@ uv run src/biomedical_graphrag/application/cli/fusion_query.py "What are the lat
 
 **Qdrant Queries:**
 
-- Hybrid (semantic + lexical) search across paper abstracts and content
+- Semantic search across paper abstracts and content
 - Similarity-based retrieval using embeddings and BM25 fusion
 
 **Hybrid Queries:**
@@ -266,7 +266,14 @@ uv run src/biomedical_graphrag/application/cli/fusion_query.py "What are the lat
   - Gene-paper associations
   - MeSH term relationships
   - Institution affiliations
-- LLM-powered automatic tool selection
+- LLM-powered tool selection & fusion:
+  - Runs one Qdrant tool: hybrid retrieval (BM25 + dense & reranking) or recommendations with contraints, - to fetch relevant papers.
+  - Calls Neo4j enrichment tools for graph evidence.
+  - Produces one fused answer from both sources.
+
+Output:
+
+- The hybrid CLI prints a final section titled "=== Unified Biomedical Answer ===".
 
 #### Sample Queries
 

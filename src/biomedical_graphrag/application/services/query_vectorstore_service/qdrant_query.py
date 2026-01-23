@@ -150,7 +150,7 @@ class AsyncQdrantQuery:
         context = QDRANT_GENERATION_PROMPT.format(
             question=question,
             context="\n".join(
-                f"Content: {doc['payload']}" for doc in await self.retrieve_documents_hybrid(question)
+                f"Content: {doc['payload']}" for doc in await self.retrieve_documents_dense(question)
             ),
         )
         logger.debug(f"Qdrant context: {context}")
