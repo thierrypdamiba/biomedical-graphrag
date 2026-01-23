@@ -33,7 +33,7 @@ async def main() -> None:
     logger.info(f"Processing question: {question}")
 
     try:
-        answer = await run_tools_sequence_and_summarize(question) #TO DO: fix async
+        answer = await run_tools_sequence_and_summarize(question)
 
         print("\n=== Unified Biomedical Answer ===\n")
         print(answer)
