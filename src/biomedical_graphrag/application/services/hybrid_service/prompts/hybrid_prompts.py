@@ -20,7 +20,7 @@ Rules:
 Argument rules:
 - For `retrieve_papers_hybrid`, build `query` from the user input
   for hybrid (dense + BM25) search. Preserve meaning. Do not add new topics.
-- For `recommend_papers_based_on_examples`:
+- For `recommend_papers_based_on_constraints`:
   - `positive_examples` = what user wants papers to BE about
   - `negative_examples` = what user wants papers to NOT BE about
   Use only information from the user.

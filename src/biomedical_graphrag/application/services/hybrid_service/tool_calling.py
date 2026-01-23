@@ -94,40 +94,47 @@ def run_graph_enrichment(question: str, qdrant_results: list[dict]) -> dict[str,
     schema = get_neo4j_schema()
     neo4j = Neo4jGraphQuery()
 
-    
-    prompt = NEO4J_PROMPT.format( #TBD: handle when errors in results
-        schema=schema,
-        question=question,
-        qdrant_points_metadata=str(qdrant_results),
-    )
+    try:
+        prompt = NEO4J_PROMPT.format( #TBD: handle when errors in results
+            schema=schema,
+            question=question,
+            qdrant_points_metadata=str(qdrant_results),
+        )
 
-    response = openai_client.responses.create(  # type: ignore[call-overload]
-        model=settings.openai.model,
-        tools=NEO4J_ENRICHMENT_TOOLS,
-        input=[{"role": "user", "content": prompt}],
-        tool_choice="auto",
-    )
+        response = openai_client.responses.create(  # type: ignore[call-overload]
+            model=settings.openai.model,
+            tools=NEO4J_ENRICHMENT_TOOLS,
+            input=[{"role": "user", "content": prompt}],
+            tool_choice="auto",
+        )
 
-    results = {}
-    if response.output:
-        for tool_call in response.output:
-            if tool_call.type == "function_call":
-                name = tool_call.name
-                args = (
-                    json.loads(tool_call.arguments)
-                    if isinstance(tool_call.arguments, str)
-                    else tool_call.arguments
-                )
-                func = getattr(neo4j, name, None)
-                if func:
-                    try:
-                        logger.info(f"Executing Neo4j tool: {name} with args: {args}")
-                        results[name] = func(**args)
-                    except Exception as e:
-                        results[name] = f"Error: {e}" #here we just propagate error to the next prompt
+        results: dict[str, Any] = {}
+        if response.output:
+            for tool_call in response.output:
+                if tool_call.type == "function_call":
+                    name = tool_call.name
+                    args = (
+                        json.loads(tool_call.arguments)
+                        if isinstance(tool_call.arguments, str)
+                        else tool_call.arguments
+                    )
+                    func = getattr(neo4j, name, None)
+                    if func:
+                        try:
+                            logger.info(f"Executing Neo4j tool: {name} with args: {args}")
+                            results[name] = func(**args)
+                        except Exception as e:
+                            results[name] = f"Error: {e}" #here we just propagate error to the next prompt
 
-    logger.info(f"Neo4j tool results: {results}")
-    return results
+        logger.info(f"Neo4j tool results: {results}")
+        return results
+    finally:
+        neo4j.close()
+
+
+async def run_graph_enrichment_async(question: str, qdrant_results: list[dict]) -> dict[str, Any]:
+    """Async wrapper for run_graph_enrichment to avoid blocking the event loop."""
+    return await asyncio.to_thread(run_graph_enrichment, question, qdrant_results)
 
 
 # --------------------------------------------------------------------
@@ -155,6 +162,15 @@ def summarize_fused_results(
     )
     return resp.output_text.strip()
 
+
+async def summarize_fused_results_async(
+    question: str, qdrant_results: list[dict], neo4j_results: dict[str, Any]
+) -> str:
+    """Async wrapper for summarize_fused_results to avoid blocking the event loop."""
+    return await asyncio.to_thread(
+        summarize_fused_results, question, qdrant_results, neo4j_results
+    )
+
 # --------------------------------------------------------------------
 # Unified helper
 # --------------------------------------------------------------------
@@ -168,5 +184,5 @@ async def run_tools_sequence_and_summarize(question: str) -> str: #TO DO: fix as
         The summarized results.
     """
     qdrant_results = await run_qdrant_vector_search(question)
-    neo4j_results = run_graph_enrichment(question, qdrant_results)  #TO DO: fix async
-    return summarize_fused_results(question, qdrant_results, neo4j_results)  #TO DO: fix async
+    neo4j_results = await run_graph_enrichment_async(question, qdrant_results)
+    return await summarize_fused_results_async(question, qdrant_results, neo4j_results)
