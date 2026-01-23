@@ -37,7 +37,7 @@ def get_neo4j_schema() -> str:
 # --------------------------------------------------------------------
 # Phase 1 — Qdrant tools selection + execution
 # --------------------------------------------------------------------
-async def run_qdrant_vector_search(question: str) -> dict[str, Any]:
+async def run_qdrant_vector_search(question: str) -> list[dict]:
     """Run Qdrant vector search.
     Args:
         question: The user question.
@@ -49,41 +49,39 @@ async def run_qdrant_vector_search(question: str) -> dict[str, Any]:
     prompt = QDRANT_PROMPT.format(question=question)
     qdrant = AsyncQdrantQuery()
 
-    # NOTE: openai_client is sync; wrap to avoid blocking the event loop.
-    response = await asyncio.to_thread(
-        openai_client.responses.create,  # type: ignore[call-overload]
-        model=settings.openai.model,
-        tools=QDRANT_TOOLS,
-        input=[{"role": "user", "content": prompt}],
-        tool_choice="required",
-    )
+    try:
+        # wrap to avoid blocking the event loop.
+        response = await asyncio.to_thread(
+            openai_client.responses.create,  # type: ignore[call-overload]
+            model=settings.openai.model,
+            tools=QDRANT_TOOLS,
+            input=[{"role": "user", "content": prompt}],
+            tool_choice="required",
+        )
 
-    results = {}
-    if response.output:
-        for tool_call in response.output:
-            if tool_call.type == "function_call":
-                name = tool_call.name
-                args = (
-                    json.loads(tool_call.arguments)
-                    if isinstance(tool_call.arguments, str)
-                    else tool_call.arguments
-                )
-                func = getattr(qdrant, name, None)
-                if func:
-                    try:
+        results = []
+        if response.output:
+            for tool_call in response.output:
+                if tool_call.type == "function_call":
+                    name = tool_call.name
+                    args = (
+                        json.loads(tool_call.arguments)
+                        if isinstance(tool_call.arguments, str) #what does this do
+                        else tool_call.arguments
+                    )
+                    func = getattr(qdrant, name, None)
+                    if func:
                         logger.info(f"Executing Qdrant tool: {name} with args: {args}")
-                        results[name] = await func(**args)
-                    except Exception as e:
-                        results[name] = f"Error: {e}"
-    
-    await qdrant.close()  # Close the async client connection
-    logger.info(f"Qdrant tool results: {results}")
+                        results = await func(**args)
+                        logger.info(f"Qdrant tool results: {results}")
+    finally:
+        await qdrant.close()  # Close the async client connection (TBD: make more optimal)
     return results
 
 # --------------------------------------------------------------------
 # Phase 2 — Neo4j enrichment tools selection + execution
 # --------------------------------------------------------------------
-def run_graph_enrichment(question: str, qdrant_results: dict[str, Any]) -> dict[str, Any]:
+def run_graph_enrichment(question: str, qdrant_results: list[dict]) -> dict[str, Any]:
     """Run graph enrichment.
 
     Args:
@@ -96,10 +94,11 @@ def run_graph_enrichment(question: str, qdrant_results: dict[str, Any]) -> dict[
     schema = get_neo4j_schema()
     neo4j = Neo4jGraphQuery()
 
+    
     prompt = NEO4J_PROMPT.format( #TBD: handle when errors in results
         schema=schema,
         question=question,
-        qdrant_points_metadata=json.dumps(qdrant_results, indent=2, ensure_ascii=False),
+        qdrant_points_metadata=str(qdrant_results),
     )
 
     response = openai_client.responses.create(  # type: ignore[call-overload]
@@ -125,7 +124,7 @@ def run_graph_enrichment(question: str, qdrant_results: dict[str, Any]) -> dict[
                         logger.info(f"Executing Neo4j tool: {name} with args: {args}")
                         results[name] = func(**args)
                     except Exception as e:
-                        results[name] = f"Error: {e}"
+                        results[name] = f"Error: {e}" #here we just propagate error to the next prompt
 
     logger.info(f"Neo4j tool results: {results}")
     return results
@@ -135,7 +134,7 @@ def run_graph_enrichment(question: str, qdrant_results: dict[str, Any]) -> dict[
 # Phase 3 — Fusion summarization
 # --------------------------------------------------------------------
 def summarize_fused_results(
-    question: str, qdrant_results: dict[str, Any], neo4j_results: dict[str, Any]
+    question: str, qdrant_results: list[dict], neo4j_results: dict[str, Any]
 ) -> str:
     """Fuse semantic and graph evidence into one final biomedical summary.
 

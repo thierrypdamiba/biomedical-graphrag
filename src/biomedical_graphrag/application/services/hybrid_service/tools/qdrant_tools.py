@@ -9,11 +9,11 @@ Qdrant vector-search tool definitions.
 QDRANT_TOOLS = [
     {
         "type": "function",
-        "name": "recommend_papers_based_on_examples",
+        "name": "recommend_papers_based_on_constraints",
         "description": (
-            "Recommend papers based on example descriptions. "
-            "Use positive_examples for topics the paper should match, "
-            "and negative_examples for topics the paper should avoid."
+            "Recommend papers based on provided examples derived from user's query. "
+            "extract to positive_examples what the paper should match, "
+            "and to negative_examples - what the paper should avoid."
         ),
         "parameters": {
             "type": "object",
@@ -21,14 +21,15 @@ QDRANT_TOOLS = [
                 "positive_examples": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Descriptions of topics the recommended papers should be similar to.",
+                    "description": "Examples the recommended papers should be similar to.",
                 },
                 "negative_examples": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Descriptions of topics the recommended papers should be dissimilar to or avoid.",
+                    "description": "Examples the recommended papers should be dissimilar to or avoid.",
                 },
             },
+            "required": ["negative_examples"],
         },
     },
     {

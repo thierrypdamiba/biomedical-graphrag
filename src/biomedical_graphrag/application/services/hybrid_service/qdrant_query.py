@@ -130,7 +130,7 @@ class AsyncQdrantQuery:
         ]
         return results
 
-    async def recommend_papers_based_on_examples(
+    async def recommend_papers_based_on_constraints(
         self,
         positive_examples: list[str] | None,
         negative_examples: list[str] | None,

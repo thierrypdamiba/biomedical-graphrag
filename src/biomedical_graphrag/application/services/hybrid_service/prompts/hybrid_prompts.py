@@ -7,21 +7,22 @@ from typing import Any
 QDRANT_PROMPT = """
 You are a biomedical query router for PubMed papers retrieval.
 
-Your ONLY task is to choose and call exactly one Qdrant tool.
-This tool will help retrieve relevant academic papers based on the user's query.
+Your ONLY task is to choose and call exactly one Qdrant tool, 
+Either similarity search or recommendations based on constraints.
+This tool should get relevant academic papers based on the user's intent.
 Do NOT generate any text.
 
 Rules:
-- Use `retrieve_papers_hybrid` if the user is simply searching for papers.
-- Use `recommend_papers_based_on_examples` if the user in its query provides examples ('like', 'should be about') and ESPECIALLY counter-examples
-  ('excluding', 'but not about', 'not like', 'shouldn't be about') regarding what the paper should or should not be about.
+- Use `retrieve_papers_hybrid` if you need to leverage similarity search (a combination of semantic and lexical).
+- Use `recommend_papers_based_on_constraints` if the user in its query provides COUNTER-examples
+  ('excluding', 'but not about', 'not like', 'shouldn't be about') regarding what the paper should NOT be about.
 
 Argument rules:
-- For `retrieve_papers_hybrid`, build `query` by lightly rewriting the user input
-  to improve hybrid (dense + BM25) search. Preserve meaning. Do not add new topics.
+- For `retrieve_papers_hybrid`, build `query` from the user input
+  for hybrid (dense + BM25) search. Preserve meaning. Do not add new topics.
 - For `recommend_papers_based_on_examples`:
-  - `positive_examples` = topics the paper should match
-  - `negative_examples` = topics the paper should avoid
+  - `positive_examples` = what user wants papers to BE about
+  - `negative_examples` = what user wants papers to NOT BE about
   Use only information from the user.
 
 Call the selected tool and return nothing else.
@@ -63,13 +64,12 @@ Synthesize both sources into one concise, factual answer for a biomedical resear
 
 Instructions:
 - Mention how Neo4j results confirm, extend, or contradict Qdrant context.
-- Highlight novel relationships discovered through the graph.
 - Avoid repetition; prefer clarity and precision.
 
 User Question:
 {question}
 
-Retrieved Qdrant Context:
+Retrieved Qdrant Context (JSON):
 {qdrant_context}
 
 Neo4j Enrichment Results (JSON):
@@ -77,35 +77,18 @@ Neo4j Enrichment Results (JSON):
 """
 
 
-def _format_qdrant_points(qdrant_points_metadata: dict[str, Any]) -> str: #TO DO: change to just concatenating paper titles & abstracts
+def _format_qdrant_points(qdrant_points_metadata: list[dict]) -> str: #TO DO: change to just concatenating paper titles & abstracts
     """Render Qdrant tool results into a compact, LLM-friendly text block."""
     try:
-        return json.dumps(qdrant_points_metadata, indent=2, ensure_ascii=False)
+        papers = [point["payload"]["paper"] for point in qdrant_points_metadata]
+        return json.dumps(papers, indent=2, ensure_ascii=False)
     except TypeError:
         # If some objects aren't JSON serializable, fall back to a safe string.
         return str(qdrant_points_metadata)
 
 
-def neo4j_prompt(schema: str, question: str, qdrant_results: dict[str, Any]) -> str:
-    """Generate the neo4j_prompt prompt.
-
-    Args:
-        schema: The Neo4j schema.
-        question: The user question.
-        qdrant_results: The Qdrant tool results / points metadata.
-
-    Returns:
-        The hybrid prompt.
-    """
-    return NEO4J_PROMPT.format(
-        schema=schema,
-        question=question,
-        qdrant_points_metadata=str(qdrant_results),
-    )
-
-
 def fusion_summary_prompt(
-    question: str, qdrant_results: dict[str, Any], neo4j_results: dict[str, Any]
+    question: str, qdrant_results: list[dict], neo4j_results: dict[str, Any]
 ) -> str:
     """Generate the fusion summary prompt.
 
