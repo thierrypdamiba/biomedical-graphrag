@@ -94,28 +94,49 @@ class GeneAPIClient:
         return pmid_to_genes
 
     async def fetch_genes(self, gene_ids: list[str]) -> list[dict]:
-        """Fetch structured gene summaries using ESummary (async)."""
+        """Fetch structured gene summaries using ESummary (async).
+        
+        Batches requests to avoid NCBI API limit of ~10,000 IDs per request.
+        """
         if not gene_ids:
             return []
 
-        def _fetch() -> list[dict]:
-            ids = ",".join(gene_ids)
-            handle = Entrez.esummary(db="gene", id=ids, retmode="xml")
-            records = Entrez.read(handle)
-            handle.close()
+        chunk_size = 500  # NCBI recommends batches of 500 or less
+        all_summaries: list[dict] = []
+        total_chunks = (len(gene_ids) + chunk_size - 1) // chunk_size
+        
+        for i in range(0, len(gene_ids), chunk_size):
+            chunk = gene_ids[i : i + chunk_size]
+            chunk_num = (i // chunk_size) + 1
+            
+            def _fetch(ids_chunk: list[str] = chunk) -> list[dict]:
+                ids = ",".join(ids_chunk)
+                handle = Entrez.esummary(db="gene", id=ids, retmode="xml")
+                records = Entrez.read(handle)
+                handle.close()
 
-            # Normalize possible wrapper structures
-            if isinstance(records, dict) and "DocumentSummarySet" in records:
-                summaries = records["DocumentSummarySet"]["DocumentSummary"]
-            elif isinstance(records, list):
-                summaries = records
-            else:
-                summaries = [records]
+                # Normalize possible wrapper structures
+                if isinstance(records, dict) and "DocumentSummarySet" in records:
+                    summaries = records["DocumentSummarySet"]["DocumentSummary"]
+                elif isinstance(records, list):
+                    summaries = records
+                else:
+                    summaries = [records]
 
-            logger.info(f"Fetched {len(summaries)} gene summaries.")
-            return summaries
+                return summaries
 
-        return await asyncio.to_thread(_fetch)
+            try:
+                chunk_summaries = await asyncio.to_thread(_fetch)
+                all_summaries.extend(chunk_summaries)
+                logger.info(f"Fetched gene summaries batch {chunk_num}/{total_chunks} ({len(chunk_summaries)} genes)")
+            except Exception as e:
+                logger.warning(f"Failed to fetch gene batch {chunk_num}/{total_chunks}: {e}")
+            
+            # Rate limit between batches
+            await asyncio.sleep(0.35)
+        
+        logger.info(f"Fetched {len(all_summaries)} total gene summaries from {total_chunks} batches.")
+        return all_summaries
 
     async def link_pubmed(self, gene_id: str) -> list[str]:
         """
