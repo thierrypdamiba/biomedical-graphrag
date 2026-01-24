@@ -15,7 +15,7 @@ applications:
             - echo "GRAPHRAG_API_URL=$GRAPHRAG_API_URL" >> .env.production
             - pnpm build
       artifacts:
-        baseDirectory: .next
+        baseDirectory: .amplify-hosting
         files:
           - '**/*'
       cache:
