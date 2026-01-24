@@ -153,8 +153,8 @@ export default function AssistantPage() {
         // Fallback: build content from results
         content = `Found ${data.results.length} relevant papers for "${query}":\n\n`;
         data.results.slice(0, 5).forEach((result: SearchResult, i: number) => {
-          const paper = result.payload?.paper || result.payload;
-          const pmid = paper?.pmid || result.id;
+          const paper = result.payload?.paper;
+          const pmid = paper?.pmid || String(result.id);
           const title = paper?.title || "Untitled";
           const authors = paper?.authors?.slice(0, 2).map((a: { name?: string }) => a.name).join(", ");
           const journal = paper?.journal || "";
