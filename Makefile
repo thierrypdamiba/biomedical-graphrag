@@ -8,12 +8,29 @@ endif
 # Load environment variables from .env
 include .env
 
-.PHONY: tests mypy clean help ruff-check ruff-check-fix ruff-format ruff-format-fix all-check all-fix
+.PHONY: tests mypy clean help ruff-check ruff-check-fix ruff-format ruff-format-fix all-check all-fix run-api run-frontend run-dev
 
 QUESTION ?=
 QUERY ?=
 MAX_RESULTS ?=
 START_INDEX ?=
+
+#################################################################################
+## API Server Commands
+#################################################################################
+
+run-api: ## Start the GraphRAG API server (port 8765)
+	@echo "Starting GraphRAG API server on http://localhost:8765..."
+	uv run python -m biomedical_graphrag.api.server
+
+run-frontend: ## Start the Next.js frontend (port 3000)
+	@echo "Starting Next.js frontend on http://localhost:3000..."
+	cd frontend && pnpm dev
+
+run-dev: ## Start both API server and frontend (use in separate terminals)
+	@echo "To run the full stack, open two terminals:"
+	@echo "  Terminal 1: make run-api"
+	@echo "  Terminal 2: make run-frontend"
 
 #################################################################################
 ## Data Collector Commands
