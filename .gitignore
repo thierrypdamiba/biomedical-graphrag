@@ -218,3 +218,22 @@ frontend/.env.local
 
 # Cursor
 .cursor/
+
+# Dev scripts and utilities
+check_*.py
+monitor_*.sh
+monitor_*.py
+*_and_*.sh
+setup_*.sh
+scripts/
+*.backup
+
+# Data backups
+data/*_original.json
+data/*.backup
+data/*_subset_*.json
+data/pubmed_dataset_10181.json
+
+# Dev notes
+CHANGES_NEEDED.md
+CREDENTIALS_CHECKLIST.md
