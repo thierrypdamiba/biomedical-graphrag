@@ -39,7 +39,7 @@ interface TraceStep {
 }
 
 interface SearchResult {
-  id: string | number;
+  id: string;
   score: number;
   payload: {
     paper?: {
