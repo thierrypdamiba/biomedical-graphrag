@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any
 
 from openai import AsyncOpenAI
@@ -294,42 +295,68 @@ class AsyncQdrantVectorStore:
 
             # Upsert batch if we have any valid papers
 
+            # Retry logic with exponential backoff
+            max_retries = 5
+            base_delay = 2.0
+            
             if only_new: 
                 if batch_upsert_operations:
-                    try:
-                        await self.client.batch_update_points(
-                            collection_name=self.collection_name,
-                            update_operations=batch_upsert_operations,
-                        )
-                        total_skipped += batch_skipped
-                        logger.info(
-                            f"✅ Batch {batch_num} completed: {len(batch_upsert_operations)} papers upserted, \
-                                {batch_skipped} skipped"
-                        )
-                    except Exception as e:
-                        logger.error(f"❌ Failed to upsert batch {batch_num}: {e}")
-                        raise
+                    for attempt in range(max_retries):
+                        try:
+                            await self.client.batch_update_points(
+                                collection_name=self.collection_name,
+                                update_operations=batch_upsert_operations,
+                            )
+                            total_skipped += batch_skipped
+                            total_processed += len(batch_upsert_operations)
+                            logger.info(
+                                f"✅ Batch {batch_num} completed: {len(batch_upsert_operations)} papers upserted, "
+                                f"{batch_skipped} skipped (total: {total_processed})"
+                            )
+                            break
+                        except Exception as e:
+                            if attempt < max_retries - 1:
+                                delay = base_delay * (2 ** attempt)
+                                logger.warning(f"⚠️ Batch {batch_num} failed (attempt {attempt + 1}/{max_retries}): {e}")
+                                logger.info(f"⏳ Retrying in {delay:.1f}s...")
+                                await asyncio.sleep(delay)
+                            else:
+                                logger.error(f"❌ Failed to upsert batch {batch_num} after {max_retries} attempts: {e}")
+                                raise
                 else:
                     logger.warning(f"⚠️ Batch {batch_num} had no valid papers to process")
             else:
                 if batch_points:
-                    try:
-                        await self.client.upsert(
-                            collection_name=self.collection_name,
-                            points=PointsList(
-                                points=batch_points,
-                            ),
-                        )
-                        total_skipped += batch_skipped
-                        logger.info(
-                            f"✅ Batch {batch_num} completed: {len(batch_points)} papers upserted, \
-                                {batch_skipped} skipped"
-                        )
-                    except Exception as e:
-                        logger.error(f"❌ Failed to upsert batch {batch_num}: {e}")
-                        raise
+                    for attempt in range(max_retries):
+                        try:
+                            await self.client.upsert(
+                                collection_name=self.collection_name,
+                                points=PointsList(
+                                    points=batch_points,
+                                ),
+                            )
+                            total_skipped += batch_skipped
+                            total_processed += len(batch_points)
+                            logger.info(
+                                f"✅ Batch {batch_num} completed: {len(batch_points)} papers upserted, "
+                                f"{batch_skipped} skipped (total: {total_processed})"
+                            )
+                            break
+                        except Exception as e:
+                            if attempt < max_retries - 1:
+                                delay = base_delay * (2 ** attempt)
+                                logger.warning(f"⚠️ Batch {batch_num} failed (attempt {attempt + 1}/{max_retries}): {e}")
+                                logger.info(f"⏳ Retrying in {delay:.1f}s...")
+                                await asyncio.sleep(delay)
+                            else:
+                                logger.error(f"❌ Failed to upsert batch {batch_num} after {max_retries} attempts: {e}")
+                                raise
                 else:
                     logger.warning(f"⚠️ Batch {batch_num} had no valid papers to process")
+            
+            # Small delay between batches to avoid rate limits
+            if batch_num < total_batches:
+                await asyncio.sleep(0.5)
 
         logger.info(
             f"🎉 Ingestion complete! Total: {total_processed} papers processed, {total_skipped} skipped"
