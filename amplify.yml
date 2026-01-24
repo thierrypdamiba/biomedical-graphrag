@@ -5,10 +5,14 @@ applications:
       phases:
         preBuild:
           commands:
-            - npm install -g pnpm
-            - pnpm install
+            # Enable corepack for faster pnpm setup
+            - corepack enable
+            - corepack prepare pnpm@latest --activate
+            - pnpm install --frozen-lockfile
         build:
           commands:
+            # Set the backend API URL for the build
+            - echo "GRAPHRAG_API_URL=$GRAPHRAG_API_URL" >> .env.production
             - pnpm build
       artifacts:
         baseDirectory: .next

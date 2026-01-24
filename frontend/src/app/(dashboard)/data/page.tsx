@@ -462,9 +462,9 @@ export default function DataPage() {
                               {year}
                             </Chip>
                           )}
-                          {paper?.journal && (
+                          {typeof paper?.journal === "string" && paper.journal && (
                             <span className="text-[10px] text-[var(--text-tertiary)] truncate max-w-[120px]">
-                              {String(paper.journal)}
+                              {paper.journal}
                             </span>
                           )}
                         </div>
@@ -477,9 +477,9 @@ export default function DataPage() {
                             {authors.length > 3 && ` +${authors.length - 3} more`}
                           </p>
                         )}
-                        {selectedPoint?.id === point.id && paper?.abstract && (
+                        {selectedPoint?.id === point.id && typeof paper?.abstract === "string" && paper.abstract && (
                           <p className="text-sm text-[var(--text-secondary)] mt-2 line-clamp-4">
-                            {String(paper.abstract)}
+                            {paper.abstract}
                           </p>
                         )}
                         {meshTerms && meshTerms.length > 0 && (

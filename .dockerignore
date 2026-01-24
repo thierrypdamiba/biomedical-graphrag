@@ -1,0 +1,16 @@
+.git
+.venv
+__pycache__
+*.pyc
+.env
+.env.*
+frontend/node_modules
+frontend/.next
+*.backup
+*_original.json
+*_subset_*.json
+check_*.py
+monitor_*.sh
+monitor_*.py
+scripts/
+.DS_Store

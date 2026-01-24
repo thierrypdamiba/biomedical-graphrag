@@ -1,24 +1,49 @@
 """
 FastAPI server for GraphRAG search API.
+
+Uses lazy loading to ensure fast startup and health check response times.
+This is critical for AWS App Runner deployments which have strict health check timeouts.
 """
 import asyncio
+import logging
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from biomedical_graphrag.application.services.hybrid_service.tool_calling import (
-    run_tools_sequence_and_summarize,
-)
-from biomedical_graphrag.utils.logger_util import setup_logging
+# Use basic logging at startup - lazy load full logger later
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-logger = setup_logging()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup/shutdown events."""
+    # Startup: preload heavy modules in background
+    async def _preload():
+        await asyncio.sleep(1)  # Let health check pass first
+        logger.info("Preloading modules...")
+        try:
+            from biomedical_graphrag.config import settings  # noqa: F401
+            from biomedical_graphrag.application.services.hybrid_service.tool_calling import (
+                run_tools_sequence_and_summarize,  # noqa: F401
+            )
+            logger.info("Modules preloaded successfully")
+        except Exception as e:
+            logger.warning(f"Module preload failed (non-fatal): {e}")
+
+    asyncio.create_task(_preload())
+    yield
+    # Shutdown: cleanup if needed
+
 
 app = FastAPI(
     title="Biomedical GraphRAG API",
     description="GraphRAG-powered search for biomedical papers",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # Add CORS middleware for frontend access
@@ -46,15 +71,16 @@ class SearchResponse(BaseModel):
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
+    """Health check endpoint - returns immediately for fast startup."""
     return {"status": "healthy"}
 
 
 @app.get("/api/neo4j/stats")
 async def neo4j_stats():
     """Get Neo4j graph statistics."""
+    # Lazy imports to avoid slow startup
     from neo4j import AsyncGraphDatabase
-    from biomedical_graphrag.config import settings
+    from biomedical_graphrag.config import settings  # noqa: F811
     
     try:
         uri = settings.neo4j.uri
@@ -129,6 +155,11 @@ async def search(request: SearchRequest) -> dict[str, Any]:
     """
     try:
         logger.info(f"Received search request: {request.query}")
+
+        # Lazy import to avoid slow startup (critical for App Runner health checks)
+        from biomedical_graphrag.application.services.hybrid_service.tool_calling import (
+            run_tools_sequence_and_summarize,
+        )
 
         # Run the GraphRAG pipeline - returns a summary string
         summary = await run_tools_sequence_and_summarize(request.query)

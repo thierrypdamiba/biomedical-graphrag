@@ -112,8 +112,8 @@ export async function POST(request: Request) {
     const queryTerms = normalizedQuery.split(/\s+/).filter(t => t.length >= 2);
 
     const scoredResults = (data.result?.points || [])
-      .map((point: { id: string | number; payload: { paper?: Record<string, unknown> } }) => {
-        const paper = point.payload?.paper || point.payload;
+      .map((point: { id: string | number; payload: Record<string, unknown> }) => {
+        const paper = (point.payload?.paper as Record<string, unknown>) || point.payload;
         const title = String(paper?.title || "").toLowerCase();
         const abstract = String(paper?.abstract || "").toLowerCase();
         const meshTerms = (paper?.mesh_terms as Array<{ term?: string }> || [])

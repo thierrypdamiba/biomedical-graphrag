@@ -479,7 +479,7 @@ export default function AssistantPage() {
                 <div className="space-y-4">
                   {(() => {
                     const paper = (selectedPoint.payload as { paper?: Record<string, unknown> })?.paper || selectedPoint.payload;
-                    const pmid = paper?.pmid || selectedPoint.id;
+                    const pmid = String(paper?.pmid || selectedPoint.id || "");
                     const title = paper?.title as string;
                     const abstract = paper?.abstract as string;
                     const authors = paper?.authors as Array<{ name?: string }>;
@@ -606,7 +606,7 @@ client = QdrantClient(url="YOUR_QDRANT_URL", api_key="YOUR_API_KEY")
 
 results = client.query_points(
     collection_name="${lastAssistantMessage.metadata?.collection || "biomedical_papers"}",
-    query="${lastAssistantMessage.metadata.query}",
+    query="${lastAssistantMessage.metadata?.query || ""}",
     limit=${topK},
     with_payload=True
 )
@@ -627,7 +627,7 @@ client = QdrantClient(url="YOUR_QDRANT_URL", api_key="YOUR_API_KEY")
 
 results = client.query_points(
     collection_name="${lastAssistantMessage.metadata?.collection || "biomedical_papers"}",
-    query="${lastAssistantMessage.metadata.query}",
+    query="${lastAssistantMessage.metadata?.query || ""}",
     limit=${topK},
     with_payload=True
 )
@@ -651,7 +651,7 @@ for point in results.points:
   -H 'api-key: YOUR_API_KEY' \\
   -H 'Content-Type: application/json' \\
   -d '{
-    "query": "${lastAssistantMessage.metadata.query}",
+    "query": "${lastAssistantMessage.metadata?.query || ""}",
     "limit": ${topK},
     "with_payload": true
   }'`;
@@ -666,7 +666,7 @@ for point in results.points:
   -H 'api-key: YOUR_API_KEY' \\
   -H 'Content-Type: application/json' \\
   -d '{
-    "query": "${lastAssistantMessage.metadata.query}",
+    "query": "${lastAssistantMessage.metadata?.query || ""}",
     "limit": ${topK},
     "with_payload": true
   }'`}
@@ -691,7 +691,7 @@ const client = new QdrantClient({
 });
 
 const results = await client.query('${lastAssistantMessage.metadata?.collection || "biomedical_papers"}', {
-  query: '${lastAssistantMessage.metadata.query}',
+  query: '${lastAssistantMessage.metadata?.query || ""}',
   limit: ${topK},
   with_payload: true,
 });
@@ -712,7 +712,7 @@ const client = new QdrantClient({
 });
 
 const results = await client.query('${lastAssistantMessage.metadata?.collection || "biomedical_papers"}', {
-  query: '${lastAssistantMessage.metadata.query}',
+  query: '${lastAssistantMessage.metadata?.query || ""}',
   limit: ${topK},
   with_payload: true,
 });`}

@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: biomedical-graphrag-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    region: oregon
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: OPENAI__API_KEY
+        sync: false
+      - key: OPENAI__MODEL
+        value: gpt-4o-mini
+      - key: OPENAI__TEMPERATURE
+        value: "0.3"
+      - key: OPENAI__MAX_TOKENS
+        value: "2000"
+      - key: NEO4J__URI
+        sync: false
+      - key: NEO4J__USERNAME
+        sync: false
+      - key: NEO4J__PASSWORD
+        sync: false
+      - key: NEO4J__DATABASE
+        value: neo4j
+      - key: QDRANT__URL
+        sync: false
+      - key: QDRANT__API_KEY
+        sync: false
+      - key: QDRANT__COLLECTION_NAME
+        value: biomedical_papers
+      - key: QDRANT__EMBEDDING_DIMENSION
+        value: "256"
+      - key: QDRANT__RERANKER_EMBEDDING_DIMENSION
+        value: "3072"
+      - key: QDRANT__EMBEDDING_MODEL
+        value: text-embedding-3-small
+      - key: QDRANT__CLOUD_INFERENCE
+        value: "true"

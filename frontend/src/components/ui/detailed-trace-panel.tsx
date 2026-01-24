@@ -264,7 +264,7 @@ export function DetailedTracePanel({
           {expandedSections.has("qdrant") && (
             <div className="p-3 space-y-2 border-t border-[var(--stroke-1)] max-h-[300px] overflow-y-auto">
               {papers.slice(0, 10).map((paper, i) => {
-                const p = paper.payload?.paper || paper.payload;
+                const p = paper.payload?.paper || (paper.payload as QdrantResult["payload"])?.paper || paper.payload as { pmid?: string; title?: string; abstract?: string; authors?: Array<{ name?: string }>; } | undefined;
                 const title = p?.title || "Untitled";
                 const pmid = p?.pmid || paper.id;
                 const authors = p?.authors?.slice(0, 2).map((a) => a.name).join(", ");
@@ -333,7 +333,7 @@ export function DetailedTracePanel({
                   </Chip>
                 ))}
               </div>
-              {neo4jEntities.genes.length > 0 && neo4jEntities.genes[0].description && (
+              {neo4jEntities.genes.length > 0 && typeof neo4jEntities.genes[0].description === "string" && (
                 <div className="mt-3 space-y-2">
                   {neo4jEntities.genes.slice(0, 3).map((gene, i) => (
                     <div key={i} className="text-xs p-2 bg-[var(--bg-2)] rounded">
