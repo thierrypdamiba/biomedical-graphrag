@@ -427,8 +427,8 @@ export default function AssistantPage() {
                     </div>
                   </div>
                   {lastAssistantMessage.metadata.results.map((result) => {
-                    const paper = result.payload?.paper || result.payload;
-                    const pmid = paper?.pmid || result.id;
+                    const paper = result.payload?.paper;
+                    const pmid = paper?.pmid || String(result.id);
                     const title = paper?.title || "Untitled";
                     const authors = paper?.authors?.slice(0, 2).map((a: { name?: string }) => a.name).join(", ");
                     const journal = paper?.journal;
