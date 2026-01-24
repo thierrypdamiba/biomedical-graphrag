@@ -1,15 +1,22 @@
 import json
+import asyncio
 from typing import Any
 
 from openai import OpenAI
 
 from biomedical_graphrag.application.services.hybrid_service.neo4j_query import Neo4jGraphQuery
+from biomedical_graphrag.application.services.hybrid_service.qdrant_query import AsyncQdrantQuery
+
 from biomedical_graphrag.application.services.hybrid_service.prompts.hybrid_prompts import (
-    HYBRID_PROMPT,
+    QDRANT_PROMPT,
+    NEO4J_PROMPT,
     fusion_summary_prompt,
 )
 from biomedical_graphrag.application.services.hybrid_service.tools.enrichment_tools import (
-    ENRICHMENT_TOOLS,
+    NEO4J_ENRICHMENT_TOOLS,
+)
+from biomedical_graphrag.application.services.hybrid_service.tools.qdrant_tools import (
+    QDRANT_TOOLS,
 )
 from biomedical_graphrag.config import settings
 from biomedical_graphrag.utils.logger_util import setup_logging
@@ -27,16 +34,59 @@ def get_neo4j_schema() -> str:
     logger.info(f"Retrieved Neo4j schema length: {len(schema)}")
     return schema
 
+# --------------------------------------------------------------------
+# Phase 1 — Qdrant tools selection + execution
+# --------------------------------------------------------------------
+async def run_qdrant_vector_search(question: str) -> list[dict]:
+    """Run Qdrant vector search.
+    Args:
+        question: The user question.
+    Returns:
+        Qdrant points metadata returned 
+        based on the selected vector search-powered tool.
+    """
+
+    prompt = QDRANT_PROMPT.format(question=question)
+    qdrant = AsyncQdrantQuery()
+
+    try:
+        # wrap to avoid blocking the event loop.
+        response = await asyncio.to_thread(
+            openai_client.responses.create,  # type: ignore[call-overload]
+            model=settings.openai.model,
+            tools=QDRANT_TOOLS,
+            input=[{"role": "user", "content": prompt}],
+            tool_choice="required",
+        )
+
+        results = []
+        if response.output:
+            for tool_call in response.output:
+                if tool_call.type == "function_call":
+                    name = tool_call.name
+                    args = (
+                        json.loads(tool_call.arguments)
+                        if isinstance(tool_call.arguments, str) #what does this do
+                        else tool_call.arguments
+                    )
+                    func = getattr(qdrant, name, None)
+                    if func:
+                        logger.info(f"Executing Qdrant tool: {name} with args: {args}")
+                        results = await func(**args)
+                        logger.info(f"Qdrant tool results: {results}")
+    finally:
+        await qdrant.close()  # Close the async client connection (TBD: make more optimal)
+    return results
 
 # --------------------------------------------------------------------
-# Phase 1 — Tool selection + execution
+# Phase 2 — Neo4j enrichment tools selection + execution
 # --------------------------------------------------------------------
-def run_graph_enrichment(question: str, qdrant_chunks: list[str]) -> dict[str, Any]:
+def run_graph_enrichment(question: str, qdrant_results: list[dict]) -> dict[str, Any]:
     """Run graph enrichment.
 
     Args:
         question: The user question.
-        qdrant_chunks: The Qdrant chunks.
+        qdrant_results: Qdrant payloads retrieved by a selected Qdrant tool.
 
     Returns:
         The Neo4j results.
@@ -44,52 +94,66 @@ def run_graph_enrichment(question: str, qdrant_chunks: list[str]) -> dict[str, A
     schema = get_neo4j_schema()
     neo4j = Neo4jGraphQuery()
 
-    prompt = HYBRID_PROMPT.format(schema=schema, question=question, chunks="---".join(qdrant_chunks))
-    logger.info(f"Prompt for tool selection based on question and Qdrant retrieval:\n{prompt}")
+    try:
+        prompt = NEO4J_PROMPT.format( #TBD: handle when errors in results
+            schema=schema,
+            question=question,
+            qdrant_points_metadata=str(qdrant_results),
+        )
 
-    response = openai_client.responses.create(  # type: ignore[call-overload]
-        model=settings.openai.model,
-        tools=ENRICHMENT_TOOLS,
-        input=[{"role": "user", "content": prompt}],
-        tool_choice="auto",
-    )
+        response = openai_client.responses.create(  # type: ignore[call-overload]
+            model=settings.openai.model,
+            tools=NEO4J_ENRICHMENT_TOOLS,
+            input=[{"role": "user", "content": prompt}],
+            tool_choice="auto",
+        )
 
-    results = {}
-    if response.output:
-        for tool_call in response.output:
-            if tool_call.type == "function_call":
-                name = tool_call.name
-                args = (
-                    json.loads(tool_call.arguments)
-                    if isinstance(tool_call.arguments, str)
-                    else tool_call.arguments
-                )
-                func = getattr(neo4j, name, None)
-                if func:
-                    try:
-                        results[name] = func(**args)
-                    except Exception as e:
-                        results[name] = f"Error: {e}"
+        results: dict[str, Any] = {}
+        if response.output:
+            for tool_call in response.output:
+                if tool_call.type == "function_call":
+                    name = tool_call.name
+                    args = (
+                        json.loads(tool_call.arguments)
+                        if isinstance(tool_call.arguments, str)
+                        else tool_call.arguments
+                    )
+                    func = getattr(neo4j, name, None)
+                    if func:
+                        try:
+                            logger.info(f"Executing Neo4j tool: {name} with args: {args}")
+                            results[name] = func(**args)
+                        except Exception as e:
+                            results[name] = f"Error: {e}" #here we just propagate error to the next prompt
 
-    logger.info(f"Neo4j tool results: {results}")
-    return results
+        logger.info(f"Neo4j tool results: {results}")
+        return results
+    finally:
+        neo4j.close()
+
+
+async def run_graph_enrichment_async(question: str, qdrant_results: list[dict]) -> dict[str, Any]:
+    """Async wrapper for run_graph_enrichment to avoid blocking the event loop."""
+    return await asyncio.to_thread(run_graph_enrichment, question, qdrant_results)
 
 
 # --------------------------------------------------------------------
-# Phase 2 — Fusion summarization
+# Phase 3 — Fusion summarization
 # --------------------------------------------------------------------
-def summarize_fused_results(question: str, qdrant_chunks: list[str], neo4j_results: dict) -> str:
+def summarize_fused_results(
+    question: str, qdrant_results: list[dict], neo4j_results: dict[str, Any]
+) -> str:
     """Fuse semantic and graph evidence into one final biomedical summary.
 
     Args:
         question: The user question.
-        qdrant_chunks: The Qdrant chunks.
+        qdrant_results: Qdrant tool results.
         neo4j_results: The Neo4j results.
 
     Returns:
         The summarized results.
     """
-    prompt = fusion_summary_prompt(question, qdrant_chunks, neo4j_results)
+    prompt = fusion_summary_prompt(question, qdrant_results, neo4j_results) #TBD: handle when errors in results
     resp = openai_client.responses.create(
         model=settings.openai.model,
         input=prompt,
@@ -99,18 +163,26 @@ def summarize_fused_results(question: str, qdrant_chunks: list[str], neo4j_resul
     return resp.output_text.strip()
 
 
+async def summarize_fused_results_async(
+    question: str, qdrant_results: list[dict], neo4j_results: dict[str, Any]
+) -> str:
+    """Async wrapper for summarize_fused_results to avoid blocking the event loop."""
+    return await asyncio.to_thread(
+        summarize_fused_results, question, qdrant_results, neo4j_results
+    )
+
 # --------------------------------------------------------------------
 # Unified helper
 # --------------------------------------------------------------------
-def run_graph_enrichment_and_summarize(question: str, qdrant_chunks: list[str]) -> str:
+async def run_tools_sequence_and_summarize(question: str) -> str: #TO DO: fix async
     """Run graph enrichment and summarize the results.
 
     Args:
         question: The user question.
-        qdrant_chunks: The Qdrant chunks.
 
     Returns:
         The summarized results.
     """
-    neo4j_results = run_graph_enrichment(question, qdrant_chunks)
-    return summarize_fused_results(question, qdrant_chunks, neo4j_results)
+    qdrant_results = await run_qdrant_vector_search(question)
+    neo4j_results = await run_graph_enrichment_async(question, qdrant_results)
+    return await summarize_fused_results_async(question, qdrant_results, neo4j_results)

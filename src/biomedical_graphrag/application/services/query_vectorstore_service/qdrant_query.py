@@ -34,7 +34,7 @@ class AsyncQdrantQuery:
         """Close the async Qdrant client."""
         await self.qdrant_client.close()
 
-    async def retrieve_documents_dense(self, question: str, top_k: int = 5) -> list[dict]:
+    async def retrieve_documents_dense(self, question: str, top_k: int = 3) -> list[dict]:
         """
         Query the Qdrant vector store for similar documents (async).
         Vanilla dense search on quantized openAI embeddings.
@@ -73,7 +73,7 @@ class AsyncQdrantQuery:
         ]
         return results
 
-    async def retrieve_documents_hybrid(self, question: str, top_k: int = 5) -> list[dict]:
+    async def retrieve_documents_hybrid(self, question: str, top_k: int = 3) -> list[dict]:
         """
         Query the Qdrant vector search engine (async).
         Hybrid dense + lexical search, fused by reranking with text-embedding-3-large.
@@ -150,7 +150,7 @@ class AsyncQdrantQuery:
         context = QDRANT_GENERATION_PROMPT.format(
             question=question,
             context="\n".join(
-                f"Content: {doc['payload']}" for doc in await self.retrieve_documents_hybrid(question)
+                f"Content: {doc['payload']}" for doc in await self.retrieve_documents_dense(question)
             ),
         )
         logger.debug(f"Qdrant context: {context}")

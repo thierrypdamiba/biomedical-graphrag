@@ -1,14 +1,11 @@
 """
 Enrichment tools definition for Neo4j graph queries.
-
-This module defines the tools that can be called by the LLM to enrich
-biomedical queries with graph-based information from Neo4j.
 """
 
 # ----------------------------
 # Enrichment tools definition
 # ----------------------------
-ENRICHMENT_TOOLS = [
+NEO4J_ENRICHMENT_TOOLS = [
     {
         "type": "function",
         "name": "get_collaborators_with_topics",
