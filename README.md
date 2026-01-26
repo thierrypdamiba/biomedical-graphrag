@@ -64,7 +64,7 @@ Article: [Building a Biomedical GraphRAG: When Knowledge Graphs Meet Vector Sear
 biomedical-graphrag/
 ├── .github/                    # GitHub workflows and templates
 ├── data/                       # Dataset storage (PubMed, Gene data)
-├── frontend/                   # Next.js dashboard (see frontend/README.md)
+├── frontend/                   # See: github.com/thierrypdamiba/biomedical-graphrag-frontend
 ├── src/
 │   └── biomedical_graphrag/
 │       ├── api/                # FastAPI server
@@ -329,19 +329,18 @@ curl -X POST http://localhost:8765/api/search \
 
 ### Frontend
 
-A Next.js dashboard is included in the `frontend/` directory:
+The frontend is maintained in a separate repository:
+
+**[biomedical-graphrag-frontend](https://github.com/thierrypdamiba/biomedical-graphrag-frontend)**
 
 ```bash
-# Start the frontend (runs on port 3000)
-make run-frontend
-
-# Or manually
-cd frontend && pnpm install && pnpm dev
+git clone https://github.com/thierrypdamiba/biomedical-graphrag-frontend.git
+cd biomedical-graphrag-frontend
+pnpm install
+pnpm dev
 ```
 
-The frontend requires the API server to be running and expects `GRAPHRAG_API_URL` environment variable (defaults to `http://localhost:8765`).
-
-See `frontend/README.md` for detailed frontend setup instructions.
+The frontend connects to the hosted backend at `https://ihdx3ugyrv.us-east-1.awsapprunner.com` by default, or you can point it to a local backend via `GRAPHRAG_API_URL=http://localhost:8765`.
 
 ### Docker
 
