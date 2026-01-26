@@ -37,6 +37,9 @@
       - [Hybrid Neo4j + Qdrant Queries](#hybrid-neo4j--qdrant-queries)
       - [Available Query Types](#available-query-types)
       - [Sample Queries](#sample-queries)
+    - [API Server](#api-server)
+    - [Frontend](#frontend)
+    - [Docker](#docker)
     - [Testing](#testing)
     - [Quality Checks](#quality-checks)
   - [License](#license)
@@ -58,12 +61,14 @@ Article: [Building a Biomedical GraphRAG: When Knowledge Graphs Meet Vector Sear
 ## Project Structure
 
 ```text
-biomedical-graphrag-pipeline/
+biomedical-graphrag/
 ├── .github/                    # GitHub workflows and templates
 ├── data/                       # Dataset storage (PubMed, Gene data)
-├── docs/                       # Documentation
+├── frontend/                   # Next.js dashboard (see frontend/README.md)
 ├── src/
 │   └── biomedical_graphrag/
+│       ├── api/                # FastAPI server
+│       │   └── server.py       # GraphRAG API endpoints
 │       ├── application/        # Application layer
 │       │   ├── cli/            # Command-line interfaces
 │       │   └── services/       # Business logic services
@@ -74,6 +79,7 @@ biomedical-graphrag-pipeline/
 │       └── utils/              # Utility functions
 ├── static/                     # Static assets (images, etc.)
 ├── tests/                      # Test suite
+├── Dockerfile                  # Docker build configuration
 ├── LICENSE                     # MIT License
 ├── Makefile                    # Build and development commands
 ├── pyproject.toml              # Project configuration and dependencies
@@ -295,6 +301,62 @@ Output:
 - What genes appear together with HIF1A in cancer research?
 
 - Which genes are frequently co-mentioned with TP53?
+
+### API Server
+
+The project includes a FastAPI server that exposes the GraphRAG functionality via HTTP endpoints:
+
+```bash
+# Start the API server (runs on port 8765)
+make run-api
+```
+
+**Available Endpoints:**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/health` | Health check |
+| GET | `/api/neo4j/stats` | Neo4j graph statistics (node/relationship counts) |
+| POST | `/api/search` | Hybrid GraphRAG search |
+
+**Search Request Example:**
+
+```bash
+curl -X POST http://localhost:8765/api/search \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What genes are associated with breast cancer?", "limit": 10}'
+```
+
+### Frontend
+
+A Next.js dashboard is included in the `frontend/` directory:
+
+```bash
+# Start the frontend (runs on port 3000)
+make run-frontend
+
+# Or manually
+cd frontend && pnpm install && pnpm dev
+```
+
+The frontend requires the API server to be running and expects `GRAPHRAG_API_URL` environment variable (defaults to `http://localhost:8765`).
+
+See `frontend/README.md` for detailed frontend setup instructions.
+
+### Docker
+
+Build and run the API server with Docker:
+
+```bash
+# Build the image
+docker build -t biomedical-graphrag:latest .
+
+# Run the container
+docker run --rm -p 8765:8765 --env-file .env biomedical-graphrag:latest
+
+# Test health endpoint
+curl http://localhost:8765/health
+```
 
 ### Troubleshooting
 

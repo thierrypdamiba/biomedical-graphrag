@@ -8,7 +8,7 @@ endif
 # Load environment variables from .env
 include .env
 
-.PHONY: tests mypy clean help ruff-check ruff-check-fix ruff-format ruff-format-fix all-check all-fix
+.PHONY: tests mypy clean help ruff-check ruff-check-fix ruff-format ruff-format-fix all-check all-fix run-api run-frontend
 
 QUESTION ?=
 QUERY ?=
@@ -80,6 +80,18 @@ custom-qdrant-query: ## Run a custom query on the Qdrant collection (modify the 
 	@echo "Running custom query on the Qdrant collection..."
 	uv run src/biomedical_graphrag/application/cli/query_vectorstore.py $(if $(QUESTION),--ask "$(QUESTION)")
 	@echo "Custom query complete."
+
+#################################################################################
+## API Server Commands
+#################################################################################
+
+run-api: ## Run the FastAPI server for GraphRAG API
+	@echo "Starting GraphRAG API server on port 8765..."
+	uv run python -m biomedical_graphrag.api.server
+
+run-frontend: ## Run the Next.js frontend (from frontend directory)
+	@echo "Starting frontend on port 3000..."
+	cd frontend && pnpm dev
 
 #################################################################################
 ## Testing
