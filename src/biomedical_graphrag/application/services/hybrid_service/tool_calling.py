@@ -174,15 +174,31 @@ async def summarize_fused_results_async(
 # --------------------------------------------------------------------
 # Unified helper
 # --------------------------------------------------------------------
-async def run_tools_sequence_and_summarize(question: str) -> str: #TO DO: fix async
+from dataclasses import dataclass
+
+
+@dataclass
+class GraphRAGResult:
+    """Result container for GraphRAG search."""
+    summary: str
+    qdrant_results: list[dict]
+    neo4j_results: dict[str, Any]
+
+
+async def run_tools_sequence_and_summarize(question: str) -> GraphRAGResult:
     """Run graph enrichment and summarize the results.
 
     Args:
         question: The user question.
 
     Returns:
-        The summarized results.
+        GraphRAGResult containing summary, qdrant_results, and neo4j_results.
     """
     qdrant_results = await run_qdrant_vector_search(question)
     neo4j_results = await run_graph_enrichment_async(question, qdrant_results)
-    return await summarize_fused_results_async(question, qdrant_results, neo4j_results)
+    summary = await summarize_fused_results_async(question, qdrant_results, neo4j_results)
+    return GraphRAGResult(
+        summary=summary,
+        qdrant_results=qdrant_results,
+        neo4j_results=neo4j_results,
+    )
