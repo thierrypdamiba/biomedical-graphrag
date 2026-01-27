@@ -200,9 +200,9 @@ async def search(request: SearchRequest) -> SearchResponse:
         # Build trace from tool executions (just names)
         trace = [TraceStep(name=t.name, result_count=t.result_count, results=t.results) for t in graphrag_result.trace]
 
-        # Format Qdrant results for frontend (limit to 5)
+        # Format Qdrant results for frontend
         formatted_results = []
-        for idx, result in enumerate(graphrag_result.qdrant_results[:5]):
+        for idx, result in enumerate(graphrag_result.qdrant_results[:request.limit]):
             formatted_results.append({
                 "id": result.get("pmid", f"result-{idx}"),
                 "title": result.get("title", "Untitled"),
