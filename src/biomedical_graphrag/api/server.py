@@ -8,7 +8,6 @@ Provides endpoints for:
 """
 
 import asyncio
-import time
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -93,10 +92,6 @@ class TraceStep(BaseModel):
     """A single step in the execution trace."""
 
     name: str
-    startTime: int
-    endTime: int | None = None
-    duration: int | None = None
-    details: dict[str, Any] | None = None
 
 
 class SearchResponse(BaseModel):
@@ -194,63 +189,18 @@ async def search(request: SearchRequest) -> SearchResponse:
 
     Combines Qdrant vector search with Neo4j knowledge graph enrichment.
     """
-    start_time = time.time()
-    trace: list[TraceStep] = []
-
     try:
         _load_services()
 
-        # Step 1: Initialize
-        init_start = int((time.time() - start_time) * 1000)
-        trace.append(TraceStep(
-            name="Initialize search",
-            startTime=init_start,
-            duration=10,
-            details={"query": request.query, "mode": request.mode, "limit": request.limit},
-        ))
-
-        # Step 2: Run Qdrant vector search
-        qdrant_start = int((time.time() - start_time) * 1000)
-
-        # Run the async hybrid search (returns GraphRAGResult)
+        # Run the async hybrid search (returns GraphRAGResult with trace)
         graphrag_result = await _run_tools_sequence(request.query)
 
-        qdrant_end = int((time.time() - start_time) * 1000)
-        trace.append(TraceStep(
-            name="Qdrant vector search",
-            startTime=qdrant_start,
-            endTime=qdrant_end,
-            duration=qdrant_end - qdrant_start,
-            details={"results_count": len(graphrag_result.qdrant_results)},
-        ))
+        # Build trace from tool executions (just names)
+        trace = [TraceStep(name=t.name) for t in graphrag_result.trace]
 
-        # Step 3: Neo4j enrichment trace
-        neo4j_start = qdrant_end
-        neo4j_end = int((time.time() - start_time) * 1000)
-        trace.append(TraceStep(
-            name="Neo4j graph enrichment",
-            startTime=neo4j_start,
-            endTime=neo4j_end,
-            duration=neo4j_end - neo4j_start,
-            details={"tools_executed": list(graphrag_result.neo4j_results.keys())},
-        ))
-
-        # Step 4: Fusion summarization trace
-        fusion_start = neo4j_end
-        fusion_end = int((time.time() - start_time) * 1000)
-        trace.append(TraceStep(
-            name="Fusion summarization",
-            startTime=fusion_start,
-            endTime=fusion_end,
-            duration=fusion_end - fusion_start,
-            details={"mode": "graphrag"},
-        ))
-
-        total_latency = int((time.time() - start_time) * 1000)
-
-        # Format results for frontend
+        # Format Qdrant results for frontend (limit to 5)
         formatted_results = []
-        for idx, result in enumerate(graphrag_result.qdrant_results):
+        for idx, result in enumerate(graphrag_result.qdrant_results[:5]):
             formatted_results.append({
                 "id": result.get("pmid", f"result-{idx}"),
                 "title": result.get("title", "Untitled"),
@@ -260,47 +210,18 @@ async def search(request: SearchRequest) -> SearchResponse:
                 "year": result.get("year", ""),
                 "pmid": result.get("pmid", ""),
                 "score": result.get("score", 0),
-                "source": "qdrant",
             })
-
-        # Add Neo4j results if any
-        for tool_name, tool_results in graphrag_result.neo4j_results.items():
-            if isinstance(tool_results, list):
-                for idx, item in enumerate(tool_results):
-                    if isinstance(item, dict):
-                        formatted_results.append({
-                            "id": f"neo4j-{tool_name}-{idx}",
-                            "title": item.get("title", item.get("name", f"Neo4j result {idx}")),
-                            "details": item,
-                            "source": "neo4j",
-                            "tool": tool_name,
-                        })
 
         return SearchResponse(
             summary=graphrag_result.summary,
             results=formatted_results,
             trace=trace,
-            metadata={
-                "query": request.query,
-                "mode": request.mode,
-                "limit": request.limit,
-                "totalLatency": total_latency,
-                "qdrantResultsCount": len(graphrag_result.qdrant_results),
-                "neo4jToolsExecuted": list(graphrag_result.neo4j_results.keys()),
-            },
+            metadata={"query": request.query},
         )
 
     except Exception as e:
         logger.error(f"Search error: {e}")
-        total_latency = int((time.time() - start_time) * 1000)
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": f"Search failed: {str(e)}",
-                "trace": [t.model_dump() for t in trace],
-                "metadata": {"totalLatency": total_latency},
-            },
-        )
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 
 def main() -> None:

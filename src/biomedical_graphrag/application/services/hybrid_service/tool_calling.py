@@ -1,5 +1,6 @@
 import json
 import asyncio
+from dataclasses import dataclass, field
 from typing import Any
 
 from openai import OpenAI
@@ -34,23 +35,34 @@ def get_neo4j_schema() -> str:
     logger.info(f"Retrieved Neo4j schema length: {len(schema)}")
     return schema
 
+@dataclass
+class ToolExecution:
+    """Record of a tool execution."""
+    name: str
+
+
+@dataclass
+class QdrantSearchResult:
+    """Result from Qdrant vector search."""
+    results: list[dict]
+    tool: ToolExecution
+
+
 # --------------------------------------------------------------------
 # Phase 1 — Qdrant tools selection + execution
 # --------------------------------------------------------------------
-async def run_qdrant_vector_search(question: str) -> list[dict]:
+async def run_qdrant_vector_search(question: str) -> QdrantSearchResult:
     """Run Qdrant vector search.
     Args:
         question: The user question.
     Returns:
-        Qdrant points metadata returned 
-        based on the selected vector search-powered tool.
+        QdrantSearchResult with results and tool execution info.
     """
-
     prompt = QDRANT_PROMPT.format(question=question)
     qdrant = AsyncQdrantQuery()
+    tool_name = "unknown"
 
     try:
-        # wrap to avoid blocking the event loop.
         response = await asyncio.to_thread(
             openai_client.responses.create,  # type: ignore[call-overload]
             model=settings.openai.model,
@@ -63,25 +75,36 @@ async def run_qdrant_vector_search(question: str) -> list[dict]:
         if response.output:
             for tool_call in response.output:
                 if tool_call.type == "function_call":
-                    name = tool_call.name
+                    tool_name = tool_call.name
                     args = (
                         json.loads(tool_call.arguments)
-                        if isinstance(tool_call.arguments, str) #what does this do
+                        if isinstance(tool_call.arguments, str)
                         else tool_call.arguments
                     )
-                    func = getattr(qdrant, name, None)
+                    func = getattr(qdrant, tool_name, None)
                     if func:
-                        logger.info(f"Executing Qdrant tool: {name} with args: {args}")
+                        logger.info(f"Executing Qdrant tool: {tool_name}")
                         results = await func(**args)
-                        logger.info(f"Qdrant tool results: {results}")
+                        logger.info(f"Qdrant results count: {len(results)}")
     finally:
-        await qdrant.close()  # Close the async client connection (TBD: make more optimal)
-    return results
+        await qdrant.close()
+
+    return QdrantSearchResult(
+        results=results,
+        tool=ToolExecution(name=tool_name),
+    )
+
+@dataclass
+class Neo4jEnrichmentResult:
+    """Result from Neo4j graph enrichment."""
+    results: dict[str, Any]
+    tools: list[ToolExecution]
+
 
 # --------------------------------------------------------------------
 # Phase 2 — Neo4j enrichment tools selection + execution
 # --------------------------------------------------------------------
-def run_graph_enrichment(question: str, qdrant_results: list[dict]) -> dict[str, Any]:
+def run_graph_enrichment(question: str, qdrant_results: list[dict]) -> Neo4jEnrichmentResult:
     """Run graph enrichment.
 
     Args:
@@ -89,13 +112,14 @@ def run_graph_enrichment(question: str, qdrant_results: list[dict]) -> dict[str,
         qdrant_results: Qdrant payloads retrieved by a selected Qdrant tool.
 
     Returns:
-        The Neo4j results.
+        Neo4jEnrichmentResult with results and tool execution info.
     """
     schema = get_neo4j_schema()
     neo4j = Neo4jGraphQuery()
+    tools_executed: list[ToolExecution] = []
 
     try:
-        prompt = NEO4J_PROMPT.format( #TBD: handle when errors in results
+        prompt = NEO4J_PROMPT.format(
             schema=schema,
             question=question,
             qdrant_points_metadata=str(qdrant_results),
@@ -121,18 +145,19 @@ def run_graph_enrichment(question: str, qdrant_results: list[dict]) -> dict[str,
                     func = getattr(neo4j, name, None)
                     if func:
                         try:
-                            logger.info(f"Executing Neo4j tool: {name} with args: {args}")
+                            logger.info(f"Executing Neo4j tool: {name}")
                             results[name] = func(**args)
                         except Exception as e:
-                            results[name] = f"Error: {e}" #here we just propagate error to the next prompt
+                            results[name] = f"Error: {e}"
+                        tools_executed.append(ToolExecution(name=name))
 
-        logger.info(f"Neo4j tool results: {results}")
-        return results
+        logger.info(f"Neo4j tools executed: {[t.name for t in tools_executed]}")
+        return Neo4jEnrichmentResult(results=results, tools=tools_executed)
     finally:
         neo4j.close()
 
 
-async def run_graph_enrichment_async(question: str, qdrant_results: list[dict]) -> dict[str, Any]:
+async def run_graph_enrichment_async(question: str, qdrant_results: list[dict]) -> Neo4jEnrichmentResult:
     """Async wrapper for run_graph_enrichment to avoid blocking the event loop."""
     return await asyncio.to_thread(run_graph_enrichment, question, qdrant_results)
 
@@ -171,20 +196,18 @@ async def summarize_fused_results_async(
         summarize_fused_results, question, qdrant_results, neo4j_results
     )
 
-# --------------------------------------------------------------------
-# Unified helper
-# --------------------------------------------------------------------
-from dataclasses import dataclass
-
-
 @dataclass
 class GraphRAGResult:
     """Result container for GraphRAG search."""
     summary: str
     qdrant_results: list[dict]
     neo4j_results: dict[str, Any]
+    trace: list[ToolExecution] = field(default_factory=list)
 
 
+# --------------------------------------------------------------------
+# Unified helper
+# --------------------------------------------------------------------
 async def run_tools_sequence_and_summarize(question: str) -> GraphRAGResult:
     """Run graph enrichment and summarize the results.
 
@@ -192,13 +215,27 @@ async def run_tools_sequence_and_summarize(question: str) -> GraphRAGResult:
         question: The user question.
 
     Returns:
-        GraphRAGResult containing summary, qdrant_results, and neo4j_results.
+        GraphRAGResult containing summary, results, and trace.
     """
-    qdrant_results = await run_qdrant_vector_search(question)
-    neo4j_results = await run_graph_enrichment_async(question, qdrant_results)
-    summary = await summarize_fused_results_async(question, qdrant_results, neo4j_results)
+    trace: list[ToolExecution] = []
+
+    # Phase 1: Qdrant vector search
+    qdrant_result = await run_qdrant_vector_search(question)
+    trace.append(qdrant_result.tool)
+
+    # Phase 2: Neo4j enrichment
+    neo4j_result = await run_graph_enrichment_async(question, qdrant_result.results)
+    trace.extend(neo4j_result.tools)
+
+    # Phase 3: Summarization
+    summary = await summarize_fused_results_async(
+        question, qdrant_result.results, neo4j_result.results
+    )
+    trace.append(ToolExecution(name="summarize"))
+
     return GraphRAGResult(
         summary=summary,
-        qdrant_results=qdrant_results,
-        neo4j_results=neo4j_results,
+        qdrant_results=qdrant_result.results,
+        neo4j_results=neo4j_result.results,
+        trace=trace,
     )
