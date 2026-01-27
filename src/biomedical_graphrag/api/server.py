@@ -228,12 +228,15 @@ async def search(request: SearchRequest) -> SearchResponse:
 
 def main() -> None:
     """Run the server."""
+    import os
+
     import uvicorn
 
+    port = int(os.environ.get("PORT", "8765"))
     uvicorn.run(
         "biomedical_graphrag.api.server:app",
         host="0.0.0.0",
-        port=8765,
+        port=port,
         reload=False,
         log_level="info",
     )
