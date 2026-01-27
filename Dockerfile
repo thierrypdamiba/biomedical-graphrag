@@ -27,5 +27,4 @@ RUN uv sync --frozen --no-dev
 # Expose port
 EXPOSE 8765
 
-# Run directly with venv python (no uv run overhead)
-CMD [".venv/bin/python", "-m", "biomedical_graphrag.api.server"]
+CMD ["uv", "run", "python", "-m", "biomedical_graphrag.api.server"]
