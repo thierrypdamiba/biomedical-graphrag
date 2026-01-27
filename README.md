@@ -64,7 +64,6 @@ Article: [Building a Biomedical GraphRAG: When Knowledge Graphs Meet Vector Sear
 biomedical-graphrag/
 ├── .github/                    # GitHub workflows and templates
 ├── data/                       # Dataset storage (PubMed, Gene data)
-├── frontend/                   # See: github.com/thierrypdamiba/biomedical-graphrag-frontend
 ├── src/
 │   └── biomedical_graphrag/
 │       ├── api/                # FastAPI server
