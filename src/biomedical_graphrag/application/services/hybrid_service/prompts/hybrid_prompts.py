@@ -65,7 +65,7 @@ Synthesize both sources into a well-structured, factual answer for a biomedical 
 Format your response using this exact markdown structure:
 
 ### Key Findings
-A numbered list (1. 2. 3.) of the most important findings from the retrieved papers. Each finding should reference the source paper by PMID (e.g. PMID: 12345678). Be specific and cite data points.
+A numbered list of exactly {limit} finding(s) — one per retrieved paper. Each finding should reference the source paper by PMID (e.g. PMID: 12345678). Be specific and cite data points. Do NOT add extra findings beyond the {limit} retrieved paper(s).
 
 ### Graph Insights
 Describe what the Neo4j knowledge graph revealed — gene relationships, author networks, institutional connections, or disease associations that extend beyond what the papers alone show. Use bullet points (- ) for each insight.
@@ -103,7 +103,7 @@ def _format_qdrant_points(qdrant_points_metadata: list[dict]) -> str: #TO DO: ch
 
 
 def fusion_summary_prompt(
-    question: str, qdrant_results: list[dict], neo4j_results: dict[str, Any]
+    question: str, qdrant_results: list[dict], neo4j_results: dict[str, Any], limit: int = 5
 ) -> str:
     """Generate the fusion summary prompt.
 
@@ -111,6 +111,7 @@ def fusion_summary_prompt(
         question: The user question.
         qdrant_results: The Qdrant tool results / points metadata.
         neo4j_results: The Neo4j results.
+        limit: Number of papers retrieved (controls Key Findings count).
 
     Returns:
         The fusion summary prompt.
@@ -119,4 +120,5 @@ def fusion_summary_prompt(
         question=question,
         qdrant_context=_format_qdrant_points(qdrant_results),
         neo4j_results=json.dumps(neo4j_results, indent=2),
+        limit=limit,
     )

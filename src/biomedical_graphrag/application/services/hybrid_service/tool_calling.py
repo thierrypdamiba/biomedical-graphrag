@@ -172,7 +172,7 @@ async def run_graph_enrichment_async(question: str, qdrant_results: list[dict]) 
 # Phase 3 — Fusion summarization
 # --------------------------------------------------------------------
 def summarize_fused_results(
-    question: str, qdrant_results: list[dict], neo4j_results: dict[str, Any]
+    question: str, qdrant_results: list[dict], neo4j_results: dict[str, Any], limit: int = 5
 ) -> str:
     """Fuse semantic and graph evidence into one final biomedical summary.
 
@@ -180,11 +180,12 @@ def summarize_fused_results(
         question: The user question.
         qdrant_results: Qdrant tool results.
         neo4j_results: The Neo4j results.
+        limit: Number of papers retrieved (controls Key Findings count).
 
     Returns:
         The summarized results.
     """
-    prompt = fusion_summary_prompt(question, qdrant_results, neo4j_results) #TBD: handle when errors in results
+    prompt = fusion_summary_prompt(question, qdrant_results, neo4j_results, limit=limit) #TBD: handle when errors in results
     resp = openai_client.responses.create(
         model=settings.openai.model,
         input=prompt,
@@ -195,11 +196,11 @@ def summarize_fused_results(
 
 
 async def summarize_fused_results_async(
-    question: str, qdrant_results: list[dict], neo4j_results: dict[str, Any]
+    question: str, qdrant_results: list[dict], neo4j_results: dict[str, Any], limit: int = 5
 ) -> str:
     """Async wrapper for summarize_fused_results to avoid blocking the event loop."""
     return await asyncio.to_thread(
-        summarize_fused_results, question, qdrant_results, neo4j_results
+        summarize_fused_results, question, qdrant_results, neo4j_results, limit
     )
 
 @dataclass
@@ -214,7 +215,7 @@ class GraphRAGResult:
 # --------------------------------------------------------------------
 # Unified helper
 # --------------------------------------------------------------------
-async def run_tools_sequence_and_summarize(question: str) -> GraphRAGResult:
+async def run_tools_sequence_and_summarize(question: str, limit: int = 5) -> GraphRAGResult:
     """Run graph enrichment and summarize the results.
 
     Args:
@@ -235,7 +236,7 @@ async def run_tools_sequence_and_summarize(question: str) -> GraphRAGResult:
 
     # Phase 3: Summarization
     summary = await summarize_fused_results_async(
-        question, qdrant_result.results, neo4j_result.results
+        question, qdrant_result.results, neo4j_result.results, limit=limit
     )
     trace.append(ToolExecution(name="summarize"))
 

@@ -195,7 +195,7 @@ async def search(request: SearchRequest) -> SearchResponse:
         _load_services()
 
         # Run the async hybrid search (returns GraphRAGResult with trace)
-        graphrag_result = await _run_tools_sequence(request.query)
+        graphrag_result = await _run_tools_sequence(request.query, limit=request.limit)
 
         # Build trace from tool executions (just names)
         trace = [TraceStep(name=t.name, result_count=t.result_count, results=t.results) for t in graphrag_result.trace]
