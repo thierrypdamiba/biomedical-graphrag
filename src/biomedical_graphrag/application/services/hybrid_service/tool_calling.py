@@ -39,6 +39,8 @@ def get_neo4j_schema() -> str:
 class ToolExecution:
     """Record of a tool execution."""
     name: str
+    result_count: int | None = None
+    results: Any = None
 
 
 @dataclass
@@ -91,7 +93,7 @@ async def run_qdrant_vector_search(question: str) -> QdrantSearchResult:
 
     return QdrantSearchResult(
         results=results,
-        tool=ToolExecution(name=tool_name),
+        tool=ToolExecution(name=tool_name, result_count=len(results), results=results),
     )
 
 @dataclass
@@ -146,10 +148,14 @@ def run_graph_enrichment(question: str, qdrant_results: list[dict]) -> Neo4jEnri
                     if func:
                         try:
                             logger.info(f"Executing Neo4j tool: {name}")
-                            results[name] = func(**args)
+                            result = func(**args)
+                            results[name] = result
+                            count = len(result) if isinstance(result, list) else None
                         except Exception as e:
                             results[name] = f"Error: {e}"
-                        tools_executed.append(ToolExecution(name=name))
+                            result = None
+                            count = 0
+                        tools_executed.append(ToolExecution(name=name, result_count=count, results=result))
 
         logger.info(f"Neo4j tools executed: {[t.name for t in tools_executed]}")
         return Neo4jEnrichmentResult(results=results, tools=tools_executed)

@@ -92,6 +92,8 @@ class TraceStep(BaseModel):
     """A single step in the execution trace."""
 
     name: str
+    result_count: int | None = None
+    results: Any = None
 
 
 class SearchResponse(BaseModel):
@@ -196,7 +198,7 @@ async def search(request: SearchRequest) -> SearchResponse:
         graphrag_result = await _run_tools_sequence(request.query)
 
         # Build trace from tool executions (just names)
-        trace = [TraceStep(name=t.name) for t in graphrag_result.trace]
+        trace = [TraceStep(name=t.name, result_count=t.result_count, results=t.results) for t in graphrag_result.trace]
 
         # Format Qdrant results for frontend (limit to 5)
         formatted_results = []
