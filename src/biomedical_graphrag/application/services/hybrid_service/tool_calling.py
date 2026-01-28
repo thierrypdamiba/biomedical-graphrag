@@ -12,6 +12,7 @@ from biomedical_graphrag.application.services.hybrid_service.prompts.hybrid_prom
     QDRANT_PROMPT,
     NEO4J_PROMPT,
     fusion_summary_prompt,
+    extract_mesh_terms,
 )
 from biomedical_graphrag.application.services.hybrid_service.tools.enrichment_tools import (
     NEO4J_ENRICHMENT_TOOLS,
@@ -126,11 +127,16 @@ def run_graph_enrichment(question: str, qdrant_results: list[dict]) -> Neo4jEnri
     neo4j = Neo4jGraphQuery()
     tools_executed: list[ToolExecution] = []
 
+    # Extract available MeSH terms from Qdrant results
+    mesh_terms = extract_mesh_terms(qdrant_results)
+    mesh_terms_str = "\n".join(f"- {term}" for term in mesh_terms) if mesh_terms else "No MeSH terms available"
+
     try:
         prompt = NEO4J_PROMPT.format(
             schema=schema,
             question=question,
             qdrant_points_metadata=str(qdrant_results),
+            mesh_terms=mesh_terms_str,
         )
 
         response = openai_client.responses.create(  # type: ignore[call-overload]

@@ -61,20 +61,12 @@ class Neo4jGraphQuery:
     ) -> list[dict[str, Any]]:
         """
         Get collaborators for an author filtered by MeSH topics.
-        Uses flexible matching: checks if any word from the topic appears in the MeSH term.
+        Uses case-insensitive exact matching for MeSH terms.
         """
-        def build_topic_condition(topic: str, mesh_var: str = "m") -> str:
-            """Build condition that matches if any word from topic appears in MeSH term."""
-            words = [w.strip() for w in topic.split() if len(w.strip()) > 2]
-            if not words:
-                return f"toLower({mesh_var}.term) CONTAINS toLower('{topic}')"
-            word_conditions = " OR ".join([f"toLower({mesh_var}.term) CONTAINS toLower('{word}')" for word in words])
-            return f"({word_conditions})"
-
         if require_all:
             topic_matches = "\n".join(
                 [
-                    f"MATCH (p)-[:HAS_MESH_TERM]->(m{i}:MeshTerm) WHERE {build_topic_condition(topic, f'm{i}')}"
+                    f"MATCH (p)-[:HAS_MESH_TERM]->(m{i}:MeshTerm) WHERE toLower(m{i}.term) = toLower('{topic}')"
                     for i, topic in enumerate(topics)
                 ]
             )
@@ -88,7 +80,7 @@ class Neo4jGraphQuery:
                 LIMIT 10
             """
         else:
-            topic_conditions = " OR ".join([build_topic_condition(topic) for topic in topics])
+            topic_conditions = " OR ".join([f"toLower(m.term) = toLower('{topic}')" for topic in topics])
             cypher = f"""
                 MATCH (a1:Author)-[:WROTE]->(p)<-[:WROTE]-(a2:Author)
                 WHERE toLower(a1.name) CONTAINS toLower('{author_name}') AND a1 <> a2

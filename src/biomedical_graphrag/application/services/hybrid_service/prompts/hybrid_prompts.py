@@ -43,8 +43,13 @@ Steps:
 4. Provide tool arguments based on the context.
 5. Call the tool(s); after all calls are complete, you may generate text.
 
+IMPORTANT: When using get_collaborators_with_topics, use ONLY MeSH terms from the "Available MeSH Terms" list below. Do NOT guess or paraphrase MeSH terms.
+
 Neo4j Graph Schema:
 {schema}
+
+Available MeSH Terms (use these exact terms for topic filtering):
+{mesh_terms}
 
 User Question:
 {question}
@@ -52,6 +57,20 @@ User Question:
 Retrieved Qdrant Context:
 {qdrant_points_metadata}
 """
+
+
+def extract_mesh_terms(qdrant_results: list[dict]) -> list[str]:
+    """Extract unique MeSH terms from Qdrant results."""
+    mesh_terms = set()
+    for result in qdrant_results:
+        try:
+            paper = result.get("payload", {}).get("paper", {})
+            for mesh in paper.get("mesh_terms", []):
+                if isinstance(mesh, dict) and mesh.get("term"):
+                    mesh_terms.add(mesh["term"])
+        except (KeyError, TypeError):
+            continue
+    return sorted(mesh_terms)
 
 FUSION_SUMMARY_PROMPT = """
 You are a biomedical research assistant combining two data sources:
