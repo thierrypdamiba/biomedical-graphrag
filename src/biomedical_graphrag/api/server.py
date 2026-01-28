@@ -210,7 +210,10 @@ async def search(request: SearchRequest) -> SearchResponse:
                 "id": paper.get("pmid") or result.get("id", f"result-{idx}"),
                 "title": paper.get("title", "Untitled"),
                 "abstract": paper.get("abstract", ""),
-                "authors": paper.get("authors", []),
+                "authors": [
+                    (a.get("name", "") if isinstance(a, dict) else str(a))
+                    for a in paper.get("authors", [])
+                ],
                 "journal": paper.get("journal", ""),
                 "year": paper.get("publication_date", ""),
                 "pmid": paper.get("pmid", ""),
