@@ -61,17 +61,18 @@ class Neo4jGraphQuery:
     ) -> list[dict[str, Any]]:
         """
         Get collaborators for an author filtered by MeSH topics.
+        Uses case-insensitive matching for both author names and MeSH terms.
         """
         if require_all:
             topic_matches = "\n".join(
                 [
-                    f"MATCH (p)-[:HAS_MESH_TERM]->(m{i}:MeshTerm) WHERE m{i}.term CONTAINS '{topic}'"
+                    f"MATCH (p)-[:HAS_MESH_TERM]->(m{i}:MeshTerm) WHERE toLower(m{i}.term) CONTAINS toLower('{topic}')"
                     for i, topic in enumerate(topics)
                 ]
             )
             cypher = f"""
                 MATCH (a1:Author)-[:WROTE]->(p)<-[:WROTE]-(a2:Author)
-                WHERE a1.name CONTAINS '{author_name}' AND a1 <> a2
+                WHERE toLower(a1.name) CONTAINS toLower('{author_name}') AND a1 <> a2
                 WITH DISTINCT a2, p
                 {topic_matches}
                 RETURN DISTINCT a2.name as collaborator, COUNT(DISTINCT p) as papers
@@ -79,10 +80,10 @@ class Neo4jGraphQuery:
                 LIMIT 10
             """
         else:
-            topic_conditions = " OR ".join([f"m.term CONTAINS '{topic}'" for topic in topics])
+            topic_conditions = " OR ".join([f"toLower(m.term) CONTAINS toLower('{topic}')" for topic in topics])
             cypher = f"""
                 MATCH (a1:Author)-[:WROTE]->(p)<-[:WROTE]-(a2:Author)
-                WHERE a1.name CONTAINS '{author_name}' AND a1 <> a2
+                WHERE toLower(a1.name) CONTAINS toLower('{author_name}') AND a1 <> a2
                 WITH DISTINCT a2, p
                 MATCH (p)-[:HAS_MESH_TERM]->(m:MeshTerm)
                 WHERE {topic_conditions}
