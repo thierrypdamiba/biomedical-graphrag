@@ -147,10 +147,20 @@ def run_graph_enrichment(question: str, qdrant_results: list[dict]) -> Neo4jEnri
         )
 
         results: dict[str, Any] = {}
+        tool_call_counts: dict[str, int] = {}  # Track calls per tool type
+        max_calls_per_tool = 3  # Safety limit per tool type
+
         if response.output:
             for tool_call in response.output:
                 if tool_call.type == "function_call":
                     name = tool_call.name
+
+                    # Check per-tool-type limit
+                    tool_call_counts[name] = tool_call_counts.get(name, 0) + 1
+                    if tool_call_counts[name] > max_calls_per_tool:
+                        logger.info(f"Skipping {name} (exceeded {max_calls_per_tool} calls)")
+                        continue
+
                     args = (
                         json.loads(tool_call.arguments)
                         if isinstance(tool_call.arguments, str)
