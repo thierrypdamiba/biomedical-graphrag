@@ -276,7 +276,7 @@ def summarize_fused_results(
     Returns:
         The summarized results.
     """
-    prompt = fusion_summary_prompt(question, qdrant_results, neo4j_results, limit=limit) #TBD: handle when errors in results
+    prompt = fusion_summary_prompt(question, qdrant_results, neo4j_results, limit=limit)
     resp = openai_client.responses.create(
         model=settings.openai.model,
         input=prompt,

@@ -3,7 +3,6 @@
 import json
 from typing import Any
 
- #TO DO: improve prompts
 QDRANT_PROMPT = """
 You are a biomedical query router for PubMed papers retrieval.
 
@@ -98,7 +97,7 @@ Neo4j Enrichment Results (JSON):
 """
 
 
-def _format_qdrant_points(qdrant_points_metadata: list[dict]) -> str: #TO DO: change to just concatenating paper titles & abstracts
+def _format_qdrant_points(qdrant_points_metadata: list[dict]) -> str:
     """Render Qdrant tool results into a compact, LLM-friendly text block."""
     try:
         papers = [point["payload"]["paper"] for point in qdrant_points_metadata]

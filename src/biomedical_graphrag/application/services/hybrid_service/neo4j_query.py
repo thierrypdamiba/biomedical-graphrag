@@ -101,21 +101,6 @@ class Neo4jGraphQuery:
             params = {"author_name": author_name, "topics": topics, "exclude_pmids": exclude_pmids}
         return self.query(cypher, params)
 
-    def get_collaborating_institutions(self, min_collaborations: int = 2) -> list[dict[str, Any]]:
-        """
-        Get institutions that collaborate frequently.
-        """
-        cypher = f"""
-            MATCH (i1)<-[:AFFILIATED_WITH]-(a1:Author)-[:WROTE]->(p)
-                  <-[:WROTE]-(a2:Author)-[:AFFILIATED_WITH]->(i2)
-            WHERE i1.name < i2.name
-            WITH i1, i2, COUNT(DISTINCT p) as collaborations
-            WHERE collaborations >= {min_collaborations}
-            RETURN i1.name as institution1, i2.name as institution2, collaborations
-            ORDER BY collaborations DESC
-        """
-        return self.query(cypher)
-
     def get_related_papers_by_mesh(
         self, pmid: str, exclude_pmids: list[str] | None = None,
     ) -> list[dict[str, Any]]:
