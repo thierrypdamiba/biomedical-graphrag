@@ -39,9 +39,11 @@ Always call at least one Neo4j enrichment tool before producing text.
 Steps:
 1. Read the user question and Qdrant context.
 2. Identify biomedical entities (PMIDs, authors, MeSH terms, institutions).
-3. Decide which Neo4j enrichment tool(s) to call, using the schema below.
+3. Select 1-2 most relevant Neo4j tools based on the entities found. Do NOT call more than 2 tools.
 4. Provide tool arguments based on the context.
 5. Call the tool(s); after all calls are complete, you may generate text.
+
+IMPORTANT: Select only the 1-2 most relevant tools for the query. Excessive tool calls slow down the response.
 
 Neo4j Graph Schema:
 {schema}

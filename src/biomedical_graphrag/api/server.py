@@ -1,5 +1,5 @@
 """
-FastAPI server for Biomedical GraphRAG API.
+FastAPI server for PubMed Navigator API.
 
 Provides endpoints for:
 - Health check
@@ -49,11 +49,11 @@ def _load_services() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
-    logger.info("Starting Biomedical GraphRAG API server")
+    logger.info("Starting PubMed Navigator API server")
     # Preload services in background after startup
     asyncio.create_task(_preload_services())
     yield
-    logger.info("Shutting down Biomedical GraphRAG API server")
+    logger.info("Shutting down PubMed Navigator API server")
 
 
 async def _preload_services() -> None:
@@ -63,7 +63,7 @@ async def _preload_services() -> None:
 
 
 app = FastAPI(
-    title="Biomedical GraphRAG API",
+    title="PubMed Navigator API",
     description="Hybrid search API combining Qdrant vector search with Neo4j knowledge graph",
     version="0.1.0",
     lifespan=lifespan,
@@ -92,6 +92,7 @@ class TraceStep(BaseModel):
     """A single step in the execution trace."""
 
     name: str
+    arguments: dict[str, Any] | None = None
     result_count: int | None = None
     results: Any = None
 
@@ -184,7 +185,7 @@ async def get_neo4j_stats() -> Neo4jStatsResponse:
         raise HTTPException(status_code=500, detail=f"Failed to fetch Neo4j stats: {str(e)}")
 
 
-@app.post("/api/search", response_model=SearchResponse)
+@app.post("/api/graphrag-query", response_model=SearchResponse)
 async def search(request: SearchRequest) -> SearchResponse:
     """
     Perform hybrid GraphRAG search.
@@ -197,20 +198,22 @@ async def search(request: SearchRequest) -> SearchResponse:
         # Run the async hybrid search (returns GraphRAGResult with trace)
         graphrag_result = await _run_tools_sequence(request.query, limit=request.limit)
 
-        # Build trace from tool executions (just names)
-        trace = [TraceStep(name=t.name, result_count=t.result_count, results=t.results) for t in graphrag_result.trace]
+        # Build trace from tool executions (including arguments)
+        trace = [TraceStep(name=t.name, arguments=t.arguments, result_count=t.result_count, results=t.results) for t in graphrag_result.trace]
 
         # Format Qdrant results for frontend
         formatted_results = []
         for idx, result in enumerate(graphrag_result.qdrant_results[:request.limit]):
+            payload = result.get("payload", {})
+            paper = payload.get("paper", {})
             formatted_results.append({
-                "id": result.get("pmid", f"result-{idx}"),
-                "title": result.get("title", "Untitled"),
-                "abstract": result.get("abstract", ""),
-                "authors": result.get("authors", []),
-                "journal": result.get("journal", ""),
-                "year": result.get("year", ""),
-                "pmid": result.get("pmid", ""),
+                "id": paper.get("pmid") or result.get("id", f"result-{idx}"),
+                "title": paper.get("title", "Untitled"),
+                "abstract": paper.get("abstract", ""),
+                "authors": paper.get("authors", []),
+                "journal": paper.get("journal", ""),
+                "year": paper.get("publication_date", ""),
+                "pmid": paper.get("pmid", ""),
                 "score": result.get("score", 0),
             })
 

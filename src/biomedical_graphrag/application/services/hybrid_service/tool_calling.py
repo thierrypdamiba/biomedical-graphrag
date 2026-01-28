@@ -39,6 +39,7 @@ def get_neo4j_schema() -> str:
 class ToolExecution:
     """Record of a tool execution."""
     name: str
+    arguments: dict[str, Any] | None = None
     result_count: int | None = None
     results: Any = None
 
@@ -53,16 +54,18 @@ class QdrantSearchResult:
 # --------------------------------------------------------------------
 # Phase 1 — Qdrant tools selection + execution
 # --------------------------------------------------------------------
-async def run_qdrant_vector_search(question: str) -> QdrantSearchResult:
+async def run_qdrant_vector_search(question: str, limit: int = 5) -> QdrantSearchResult:
     """Run Qdrant vector search.
     Args:
         question: The user question.
+        limit: Maximum number of results to return.
     Returns:
         QdrantSearchResult with results and tool execution info.
     """
     prompt = QDRANT_PROMPT.format(question=question)
     qdrant = AsyncQdrantQuery()
     tool_name = "unknown"
+    tool_args: dict[str, Any] = {}
 
     try:
         response = await asyncio.to_thread(
@@ -83,9 +86,12 @@ async def run_qdrant_vector_search(question: str) -> QdrantSearchResult:
                         if isinstance(tool_call.arguments, str)
                         else tool_call.arguments
                     )
+                    # Force the limit from user setting
+                    args["top_k"] = limit
+                    tool_args = args.copy()
                     func = getattr(qdrant, tool_name, None)
                     if func:
-                        logger.info(f"Executing Qdrant tool: {tool_name}")
+                        logger.info(f"Executing Qdrant tool: {tool_name} with args: {args}")
                         results = await func(**args)
                         logger.info(f"Qdrant results count: {len(results)}")
     finally:
@@ -93,7 +99,7 @@ async def run_qdrant_vector_search(question: str) -> QdrantSearchResult:
 
     return QdrantSearchResult(
         results=results,
-        tool=ToolExecution(name=tool_name, result_count=len(results), results=results),
+        tool=ToolExecution(name=tool_name, arguments=tool_args, result_count=len(results), results=results),
     )
 
 @dataclass
@@ -135,9 +141,14 @@ def run_graph_enrichment(question: str, qdrant_results: list[dict]) -> Neo4jEnri
         )
 
         results: dict[str, Any] = {}
+        tool_count = 0
+        max_neo4j_tools = 2  # Limit Neo4j tools to avoid excessive calls
         if response.output:
             for tool_call in response.output:
                 if tool_call.type == "function_call":
+                    if tool_count >= max_neo4j_tools:
+                        logger.info(f"Skipping Neo4j tool call (limit of {max_neo4j_tools} reached)")
+                        break
                     name = tool_call.name
                     args = (
                         json.loads(tool_call.arguments)
@@ -147,7 +158,7 @@ def run_graph_enrichment(question: str, qdrant_results: list[dict]) -> Neo4jEnri
                     func = getattr(neo4j, name, None)
                     if func:
                         try:
-                            logger.info(f"Executing Neo4j tool: {name}")
+                            logger.info(f"Executing Neo4j tool: {name} with args: {args}")
                             result = func(**args)
                             results[name] = result
                             count = len(result) if isinstance(result, list) else None
@@ -155,7 +166,8 @@ def run_graph_enrichment(question: str, qdrant_results: list[dict]) -> Neo4jEnri
                             results[name] = f"Error: {e}"
                             result = None
                             count = 0
-                        tools_executed.append(ToolExecution(name=name, result_count=count, results=result))
+                        tools_executed.append(ToolExecution(name=name, arguments=args, result_count=count, results=result))
+                        tool_count += 1
 
         logger.info(f"Neo4j tools executed: {[t.name for t in tools_executed]}")
         return Neo4jEnrichmentResult(results=results, tools=tools_executed)
@@ -227,7 +239,7 @@ async def run_tools_sequence_and_summarize(question: str, limit: int = 5) -> Gra
     trace: list[ToolExecution] = []
 
     # Phase 1: Qdrant vector search
-    qdrant_result = await run_qdrant_vector_search(question)
+    qdrant_result = await run_qdrant_vector_search(question, limit=limit)
     trace.append(qdrant_result.tool)
 
     # Phase 2: Neo4j enrichment
