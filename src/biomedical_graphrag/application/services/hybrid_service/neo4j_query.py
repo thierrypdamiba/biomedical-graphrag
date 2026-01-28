@@ -57,43 +57,49 @@ class Neo4jGraphQuery:
         """
 
     def get_collaborators_with_topics(
-        self, author_name: str, topics: list[str], require_all: bool = False
+        self, author_name: str, topics: list[str], require_all: bool = False,
+        exclude_pmids: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Get collaborators for an author filtered by MeSH topics.
         Uses case-insensitive CONTAINS matching for flexibility.
+        Optionally excludes papers already retrieved by Qdrant.
         """
+        exclude_pmids = exclude_pmids or []
         if require_all:
-            topic_matches = "\n".join(
-                [
-                    f"MATCH (p)-[:HAS_MESH_TERM]->(m{i}:MeshTerm) WHERE toLower(m{i}.term) CONTAINS toLower('{topic}')"
-                    for i, topic in enumerate(topics)
-                ]
+            topic_clauses = "\n".join(
+                f"MATCH (p)-[:HAS_MESH_TERM]->(m{i}:MeshTerm) WHERE toLower(m{i}.term) CONTAINS toLower($topic_{i})"
+                for i in range(len(topics))
             )
             cypher = f"""
-                MATCH (a1:Author)-[:WROTE]->(p)<-[:WROTE]-(a2:Author)
-                WHERE toLower(a1.name) CONTAINS toLower('{author_name}') AND a1 <> a2
+                MATCH (a1:Author)-[:WROTE]->(p:Paper)<-[:WROTE]-(a2:Author)
+                WHERE toLower(a1.name) CONTAINS toLower($author_name) AND a1 <> a2
+                  AND NOT p.pmid IN $exclude_pmids
                 WITH DISTINCT a2, p
-                {topic_matches}
+                {topic_clauses}
                 RETURN DISTINCT a2.name as collaborator, COUNT(DISTINCT p) as papers
                 ORDER BY papers DESC
                 LIMIT 10
             """
+            params: dict[str, Any] = {"author_name": author_name, "exclude_pmids": exclude_pmids}
+            for i, topic in enumerate(topics):
+                params[f"topic_{i}"] = topic
         else:
-            topic_conditions = " OR ".join([f"toLower(m.term) CONTAINS toLower('{topic}')" for topic in topics])
-            cypher = f"""
-                MATCH (a1:Author)-[:WROTE]->(p)<-[:WROTE]-(a2:Author)
-                WHERE toLower(a1.name) CONTAINS toLower('{author_name}') AND a1 <> a2
+            cypher = """
+                MATCH (a1:Author)-[:WROTE]->(p:Paper)<-[:WROTE]-(a2:Author)
+                WHERE toLower(a1.name) CONTAINS toLower($author_name) AND a1 <> a2
+                  AND NOT p.pmid IN $exclude_pmids
                 WITH DISTINCT a2, p
                 MATCH (p)-[:HAS_MESH_TERM]->(m:MeshTerm)
-                WHERE {topic_conditions}
+                WHERE ANY(topic IN $topics WHERE toLower(m.term) CONTAINS toLower(topic))
                 RETURN DISTINCT a2.name as collaborator,
                        COUNT(DISTINCT p) as papers,
                        COLLECT(DISTINCT m.term)[0..3] as sample_topics
                 ORDER BY papers DESC
                 LIMIT 10
             """
-        return self.query(cypher)
+            params = {"author_name": author_name, "topics": topics, "exclude_pmids": exclude_pmids}
+        return self.query(cypher, params)
 
     def get_collaborating_institutions(self, min_collaborations: int = 2) -> list[dict[str, Any]]:
         """
@@ -110,20 +116,24 @@ class Neo4jGraphQuery:
         """
         return self.query(cypher)
 
-    def get_related_papers_by_mesh(self, pmid: str) -> list[dict[str, Any]]:
+    def get_related_papers_by_mesh(
+        self, pmid: str, exclude_pmids: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Get papers related by MeSH terms to a given PMID.
+        Optionally excludes papers already retrieved by Qdrant.
         """
-        cypher = f"""
-            MATCH (p1:Paper {{pmid: '{pmid}'}})-[:HAS_MESH_TERM]->(m)
+        exclude_pmids = exclude_pmids or []
+        cypher = """
+            MATCH (p1:Paper {pmid: $pmid})-[:HAS_MESH_TERM]->(m)
                   <-[:HAS_MESH_TERM]-(p2:Paper)
-            WHERE p1 <> p2
+            WHERE p1 <> p2 AND NOT p2.pmid IN $exclude_pmids
             WITH p2, COUNT(DISTINCT m) as shared_terms
             RETURN p2.pmid as pmid, p2.title as title, shared_terms
             ORDER BY shared_terms DESC
             LIMIT 10
         """
-        return self.query(cypher)
+        return self.query(cypher, {"pmid": pmid, "exclude_pmids": exclude_pmids})
 
     def get_genes_in_same_papers(
         self, target_gene: str, mesh_filter: str | None = None

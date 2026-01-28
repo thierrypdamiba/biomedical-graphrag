@@ -12,7 +12,6 @@ from biomedical_graphrag.application.services.hybrid_service.prompts.hybrid_prom
     QDRANT_PROMPT,
     NEO4J_PROMPT,
     fusion_summary_prompt,
-    extract_mesh_terms,
 )
 from biomedical_graphrag.application.services.hybrid_service.tools.enrichment_tools import (
     NEO4J_ENRICHMENT_TOOLS,
@@ -27,6 +26,68 @@ logger = setup_logging()
 
 
 openai_client = OpenAI(api_key=settings.openai.api_key.get_secret_value())
+
+
+def _extract_qdrant_context(qdrant_results: list[dict]) -> dict[str, list[str]]:
+    """Extract structured entities from Qdrant results for Neo4j tool pre-fill."""
+    pmids: list[str] = []
+    authors: list[str] = []
+    mesh_terms: list[str] = []
+    genes: list[str] = []
+    for r in qdrant_results:
+        paper = r.get("payload", {}).get("paper", {})
+        if paper.get("pmid"):
+            pmids.append(paper["pmid"])
+        for a in paper.get("authors", []):
+            name = a.get("name") if isinstance(a, dict) else str(a)
+            if name:
+                authors.append(name)
+        for m in paper.get("mesh_terms", []):
+            term = m.get("term") if isinstance(m, dict) else str(m)
+            if term:
+                mesh_terms.append(term)
+        for g in r.get("payload", {}).get("genes", []):
+            name = g.get("name") if isinstance(g, dict) else str(g)
+            if name:
+                genes.append(name)
+    return {
+        "pmids": list(dict.fromkeys(pmids)),
+        "authors": list(dict.fromkeys(authors)),
+        "mesh_terms": list(dict.fromkeys(mesh_terms)),
+        "genes": list(dict.fromkeys(genes)),
+    }
+
+
+def _score_authors(neo4j: Neo4jGraphQuery, authors: list[str], mesh_terms: list[str]) -> list[str]:
+    """Score authors by paper count on relevant topics. Returns 'Name (N papers)' sorted by count."""
+    if not authors:
+        return []
+    # If we have MeSH terms, score by topic-relevant papers; otherwise total papers
+    if mesh_terms:
+        results = neo4j.query(
+            """
+            UNWIND $names AS name
+            MATCH (a:Author)-[:WROTE]->(p:Paper)-[:HAS_MESH_TERM]->(m:MeshTerm)
+            WHERE a.name = name
+              AND ANY(topic IN $topics WHERE toLower(m.term) CONTAINS toLower(topic))
+            RETURN a.name AS author, COUNT(DISTINCT p) AS papers
+            ORDER BY papers DESC
+            """,
+            {"names": authors[:30], "topics": mesh_terms[:5]},
+        )
+    else:
+        results = neo4j.query(
+            """
+            UNWIND $names AS name
+            MATCH (a:Author)-[:WROTE]->(p:Paper)
+            WHERE a.name = name
+            RETURN a.name AS author, COUNT(p) AS papers
+            ORDER BY papers DESC
+            """,
+            {"names": authors[:30]},
+        )
+    scored = [f"{r['author']} ({r['papers']} papers)" for r in results if r["papers"] > 0]
+    return scored
 
 
 def get_neo4j_schema() -> str:
@@ -127,16 +188,19 @@ def run_graph_enrichment(question: str, qdrant_results: list[dict]) -> Neo4jEnri
     neo4j = Neo4jGraphQuery()
     tools_executed: list[ToolExecution] = []
 
-    # Extract available MeSH terms from Qdrant results
-    mesh_terms = extract_mesh_terms(qdrant_results)
-    mesh_terms_str = "\n".join(f"- {term}" for term in mesh_terms) if mesh_terms else "No MeSH terms available"
+    # Extract structured context from Qdrant results
+    ctx = _extract_qdrant_context(qdrant_results)
+    scored_authors = _score_authors(neo4j, ctx["authors"], ctx["mesh_terms"])
+    logger.info(f"Qdrant context: {len(ctx['pmids'])} PMIDs, {len(scored_authors)} scored authors, {len(ctx['mesh_terms'])} MeSH, {len(ctx['genes'])} genes")
 
     try:
         prompt = NEO4J_PROMPT.format(
             schema=schema,
             question=question,
-            qdrant_points_metadata=str(qdrant_results),
-            mesh_terms=mesh_terms_str,
+            pmids=", ".join(ctx["pmids"]) or "None",
+            authors="; ".join(scored_authors[:15]) or "None",
+            mesh_terms=", ".join(ctx["mesh_terms"][:30]) or "None",
+            genes=", ".join(ctx["genes"][:20]) or "None",
         )
 
         response = openai_client.responses.create(  # type: ignore[call-overload]
@@ -147,15 +211,14 @@ def run_graph_enrichment(question: str, qdrant_results: list[dict]) -> Neo4jEnri
         )
 
         results: dict[str, Any] = {}
-        tool_call_counts: dict[str, int] = {}  # Track calls per tool type
-        max_calls_per_tool = 3  # Safety limit per tool type
+        tool_call_counts: dict[str, int] = {}
+        max_calls_per_tool = 3
 
         if response.output:
             for tool_call in response.output:
                 if tool_call.type == "function_call":
                     name = tool_call.name
 
-                    # Check per-tool-type limit
                     tool_call_counts[name] = tool_call_counts.get(name, 0) + 1
                     if tool_call_counts[name] > max_calls_per_tool:
                         logger.info(f"Skipping {name} (exceeded {max_calls_per_tool} calls)")
@@ -166,6 +229,11 @@ def run_graph_enrichment(question: str, qdrant_results: list[dict]) -> Neo4jEnri
                         if isinstance(tool_call.arguments, str)
                         else tool_call.arguments
                     )
+
+                    # Auto-inject exclude_pmids for tools that support it
+                    if name in ("get_collaborators_with_topics", "get_related_papers_by_mesh"):
+                        args.setdefault("exclude_pmids", ctx["pmids"])
+
                     func = getattr(neo4j, name, None)
                     if func:
                         try:

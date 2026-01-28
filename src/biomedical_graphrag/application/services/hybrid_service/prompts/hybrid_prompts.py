@@ -33,44 +33,31 @@ User Question:
 
 NEO4J_PROMPT = """
 You are a biomedical reasoning assistant.
-You CANNOT answer the question using Qdrant context alone.
-Always call at least one Neo4j enrichment tool before producing text.
+Always call at least one Neo4j enrichment tool. Do NOT generate text.
 
 Steps:
-1. Read the user question and Qdrant context.
-2. Identify biomedical entities (PMIDs, authors, MeSH terms, institutions).
-3. Decide which Neo4j enrichment tool(s) to call, using the schema below.
-4. Provide tool arguments based on the context.
-5. Call the tool(s); after all calls are complete, you may generate text.
+1. Read the user question and the extracted entities below.
+2. Pick the best Neo4j tool(s) and fill arguments using ONLY the entities listed.
+3. Do NOT invent entity names — use the exact strings provided.
 
-IMPORTANT: When using get_collaborators_with_topics, use ONLY MeSH terms from the "Available MeSH Terms" list below. Do NOT guess or paraphrase MeSH terms.
+IMPORTANT:
+- For get_collaborators_with_topics: pick author_name from the Authors list and topics from the MeSH Terms list below. Copy-paste the EXACT MeSH term strings. Do NOT paraphrase (e.g. use "Neoplasms" not "cancer"). Set require_all=false unless the user explicitly asks for ALL topics. PREFER authors with higher paper counts — they have richer collaboration networks.
+- For get_related_papers_by_mesh: pick a pmid from the list below.
+- For get_genes_in_same_papers: pick a gene from the list below.
+- The exclude_pmids parameter is auto-filled. Do NOT set it.
 
 Neo4j Graph Schema:
 {schema}
 
-Available MeSH Terms (use these exact terms for topic filtering):
-{mesh_terms}
-
 User Question:
 {question}
 
-Retrieved Qdrant Context:
-{qdrant_points_metadata}
+Extracted Entities from Retrieved Papers:
+- PMIDs: {pmids}
+- Authors: {authors}
+- MeSH Terms: {mesh_terms}
+- Genes: {genes}
 """
-
-
-def extract_mesh_terms(qdrant_results: list[dict]) -> list[str]:
-    """Extract unique MeSH terms from Qdrant results."""
-    mesh_terms = set()
-    for result in qdrant_results:
-        try:
-            paper = result.get("payload", {}).get("paper", {})
-            for mesh in paper.get("mesh_terms", []):
-                if isinstance(mesh, dict) and mesh.get("term"):
-                    mesh_terms.add(mesh["term"])
-        except (KeyError, TypeError):
-            continue
-    return sorted(mesh_terms)
 
 FUSION_SUMMARY_PROMPT = """
 You are a biomedical research assistant combining two data sources:
