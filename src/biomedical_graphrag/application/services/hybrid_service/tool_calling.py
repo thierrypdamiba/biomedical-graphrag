@@ -141,14 +141,9 @@ def run_graph_enrichment(question: str, qdrant_results: list[dict]) -> Neo4jEnri
         )
 
         results: dict[str, Any] = {}
-        tool_count = 0
-        max_neo4j_tools = 2  # Limit Neo4j tools to avoid excessive calls
         if response.output:
             for tool_call in response.output:
                 if tool_call.type == "function_call":
-                    if tool_count >= max_neo4j_tools:
-                        logger.info(f"Skipping Neo4j tool call (limit of {max_neo4j_tools} reached)")
-                        break
                     name = tool_call.name
                     args = (
                         json.loads(tool_call.arguments)
@@ -163,11 +158,11 @@ def run_graph_enrichment(question: str, qdrant_results: list[dict]) -> Neo4jEnri
                             results[name] = result
                             count = len(result) if isinstance(result, list) else None
                         except Exception as e:
+                            logger.error(f"Neo4j tool {name} failed: {e}")
                             results[name] = f"Error: {e}"
                             result = None
                             count = 0
                         tools_executed.append(ToolExecution(name=name, arguments=args, result_count=count, results=result))
-                        tool_count += 1
 
         logger.info(f"Neo4j tools executed: {[t.name for t in tools_executed]}")
         return Neo4jEnrichmentResult(results=results, tools=tools_executed)
