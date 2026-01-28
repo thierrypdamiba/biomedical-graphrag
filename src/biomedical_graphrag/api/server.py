@@ -84,7 +84,7 @@ class SearchRequest(BaseModel):
     """Search request body."""
 
     query: str = Field(..., description="The search query")
-    limit: int = Field(default=10, ge=1, le=100, description="Maximum number of results")
+    limit: int = Field(default=5, ge=1, le=5, description="Maximum number of results")
     mode: str = Field(default="graphrag", description="Search mode: graphrag, dense, sparse, hybrid")
 
 
