@@ -22,16 +22,6 @@ NEO4J_ENRICHMENT_TOOLS = [
     },
     {
         "type": "function",
-        "name": "get_collaborating_institutions",
-        "description": "Get institutions that collaborate frequently.",
-        "parameters": {
-            "type": "object",
-            "properties": {"min_collaborations": {"type": "integer"}},
-            "required": ["min_collaborations"],
-        },
-    },
-    {
-        "type": "function",
         "name": "get_related_papers_by_mesh",
         "description": "Get papers related by MeSH terms to a given PMID.",
         "parameters": {
