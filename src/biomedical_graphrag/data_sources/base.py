@@ -10,8 +10,6 @@ from biomedical_graphrag.utils.logger_util import setup_logging
 
 logger = setup_logging()
 
-# Global rate limiter: 3 requests per second across all API calls
-# _GLOBAL_RATE_LIMITER = asyncio.Semaphore(3)
 _GLOBAL_RATE_LOCK = asyncio.Lock()
 _LAST_REQUEST_TIME = 0.0
 

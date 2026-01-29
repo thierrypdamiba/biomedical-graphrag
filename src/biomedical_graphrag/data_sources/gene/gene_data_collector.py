@@ -1,11 +1,8 @@
 import asyncio
 import json
-import random
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-
-from Bio import Entrez
 
 from biomedical_graphrag.config import settings
 from biomedical_graphrag.data_sources.base import BaseDataSource
@@ -46,94 +43,6 @@ class GeneDataCollector(BaseDataSource):
         """
         await self._rate_limit()
         return await self.api.fetch_genes(entity_ids)
-
-    async def _batch_link_pubmed(self, gene_ids: list[str]) -> dict[str, list[str]]:
-        """
-        Batch-fetch PubMed links for multiple GeneIDs in slow, small chunks (async).
-        Returns a dict {gene_id: [pmid1, pmid2, ...]}.
-        """
-        chunk_size = 10
-        max_retries = 3
-        base_backoff = 0.8
-
-        linked_map: dict[str, list[str]] = {}
-        for start in range(0, len(gene_ids), chunk_size):
-            chunk = gene_ids[start : start + chunk_size]
-            logger.debug(
-                f"Linking PubMed for GeneIDs chunk {start}-{start + len(chunk) - 1} (size={len(chunk)})"
-            )
-            attempt = 0
-            while True:
-                try:
-                    await self._rate_limit()
-
-                    def _elink(chunk_ids: list[str] = chunk, start_idx: int = start) -> list:
-                        handle = Entrez.elink(dbfrom="gene", db="pubmed", id=",".join(chunk_ids))
-                        record = Entrez.read(handle)
-                        handle.close()
-                        logger.debug(
-                            f"Chunk {start_idx}-{start_idx + len(chunk_ids) - 1} "
-                            f"elink succeeded with {len(record)} records"
-                        )
-                        return record
-
-                    record = await asyncio.to_thread(_elink)
-                    break
-                except Exception:  # noqa: BLE001
-                    attempt += 1
-                    if attempt > max_retries:
-                        # Fallback to per-ID linking with cautious delays
-                        logger.warning(
-                            f"Chunk {start}-{start + len(chunk) - 1} failed after retries; \
-                            falling back to per-ID linking"
-                        )
-                        record = []
-                        for gid in chunk:
-                            per_attempt = 0
-                            while True:
-                                try:
-                                    await self._rate_limit()
-
-                                    def _single_elink(gene_id: str = gid) -> list:
-                                        handle = Entrez.elink(dbfrom="gene", db="pubmed", id=gene_id)
-                                        single = Entrez.read(handle)
-                                        handle.close()
-                                        logger.debug(
-                                            f"Per-ID elink succeeded for GeneID={gene_id} "
-                                            f"with {len(single)} records"
-                                        )
-                                        return single
-
-                                    single = await asyncio.to_thread(_single_elink)
-                                    record.extend(single)
-                                    break
-                                except Exception:
-                                    per_attempt += 1
-                                    if per_attempt > max_retries:
-                                        logger.warning(
-                                            f"Per-ID elink permanently failed for GeneID={gid}"
-                                        )
-                                        break
-                                    jitter = random.SystemRandom().uniform(0, 0.4)
-                                    await asyncio.sleep(base_backoff * (2 ** (per_attempt - 1)) + jitter)
-                        break
-                    jitter = random.SystemRandom().uniform(0, 0.4)
-                    await asyncio.sleep(base_backoff * (2 ** (attempt - 1)) + jitter)
-
-            for linkset in record:
-                gene_id = linkset.get("IdList", [None])[0]
-                pmids: list[str] = []
-                for linkdb in linkset.get("LinkSetDb", []):
-                    if linkdb.get("DbTo") == "pubmed":
-                        pmids.extend([link["Id"] for link in linkdb.get("Link", [])])
-                if gene_id:
-                    linked_map[gene_id] = pmids
-
-            # gentle pause between chunks
-            await asyncio.sleep(0.35)
-
-        logger.info(f"Linked PubMed PMIDs for {len(linked_map)} genes.")
-        return linked_map
 
     async def collect_dataset(self, query: str = "", max_results: int = 0) -> GeneDataset:
         """

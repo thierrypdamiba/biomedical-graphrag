@@ -64,7 +64,6 @@ Article: [Building a Biomedical GraphRAG: When Knowledge Graphs Meet Vector Sear
 biomedical-graphrag/
 ├── .github/                    # GitHub workflows and templates
 ├── data/                       # Dataset storage (PubMed, Gene data)
-├── frontend/                   # See: github.com/thierrypdamiba/biomedical-graphrag-frontend
 ├── src/
 │   └── biomedical_graphrag/
 │       ├── api/                # FastAPI server
@@ -340,7 +339,7 @@ pnpm install
 pnpm dev
 ```
 
-The frontend connects to the hosted backend at `https://ihdx3ugyrv.us-east-1.awsapprunner.com` by default, or you can point it to a local backend via `GRAPHRAG_API_URL=http://localhost:8765`.
+The frontend connects to the hosted backend at `https://biomedical-graphrag-9qqm.onrender.com` by default, or you can point it to a local backend via `GRAPHRAG_API_URL=http://localhost:8765`.
 
 ### Docker
 

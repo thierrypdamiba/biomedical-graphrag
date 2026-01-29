@@ -1,5 +1,5 @@
 """
-FastAPI server for Biomedical GraphRAG API.
+FastAPI server for PubMed Navigator API.
 
 Provides endpoints for:
 - Health check
@@ -8,7 +8,6 @@ Provides endpoints for:
 """
 
 import asyncio
-import time
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -50,11 +49,11 @@ def _load_services() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
-    logger.info("Starting Biomedical GraphRAG API server")
+    logger.info("Starting PubMed Navigator API server")
     # Preload services in background after startup
     asyncio.create_task(_preload_services())
     yield
-    logger.info("Shutting down Biomedical GraphRAG API server")
+    logger.info("Shutting down PubMed Navigator API server")
 
 
 async def _preload_services() -> None:
@@ -64,7 +63,7 @@ async def _preload_services() -> None:
 
 
 app = FastAPI(
-    title="Biomedical GraphRAG API",
+    title="PubMed Navigator API",
     description="Hybrid search API combining Qdrant vector search with Neo4j knowledge graph",
     version="0.1.0",
     lifespan=lifespan,
@@ -85,7 +84,7 @@ class SearchRequest(BaseModel):
     """Search request body."""
 
     query: str = Field(..., description="The search query")
-    limit: int = Field(default=10, ge=1, le=100, description="Maximum number of results")
+    limit: int = Field(default=5, ge=1, le=5, description="Maximum number of results")
     mode: str = Field(default="graphrag", description="Search mode: graphrag, dense, sparse, hybrid")
 
 
@@ -93,10 +92,9 @@ class TraceStep(BaseModel):
     """A single step in the execution trace."""
 
     name: str
-    startTime: int
-    endTime: int | None = None
-    duration: int | None = None
-    details: dict[str, Any] | None = None
+    arguments: dict[str, Any] | None = None
+    result_count: int | None = None
+    results: Any = None
 
 
 class SearchResponse(BaseModel):
@@ -187,130 +185,64 @@ async def get_neo4j_stats() -> Neo4jStatsResponse:
         raise HTTPException(status_code=500, detail=f"Failed to fetch Neo4j stats: {str(e)}")
 
 
-@app.post("/api/search", response_model=SearchResponse)
+@app.post("/api/graphrag-query", response_model=SearchResponse)
 async def search(request: SearchRequest) -> SearchResponse:
     """
     Perform hybrid GraphRAG search.
 
     Combines Qdrant vector search with Neo4j knowledge graph enrichment.
     """
-    start_time = time.time()
-    trace: list[TraceStep] = []
-
     try:
         _load_services()
 
-        # Step 1: Initialize
-        init_start = int((time.time() - start_time) * 1000)
-        trace.append(TraceStep(
-            name="Initialize search",
-            startTime=init_start,
-            duration=10,
-            details={"query": request.query, "mode": request.mode, "limit": request.limit},
-        ))
+        # Run the async hybrid search (returns GraphRAGResult with trace)
+        graphrag_result = await _run_tools_sequence(request.query, limit=request.limit)
 
-        # Step 2: Run Qdrant vector search
-        qdrant_start = int((time.time() - start_time) * 1000)
+        # Build trace from tool executions (including arguments)
+        trace = [TraceStep(name=t.name, arguments=t.arguments, result_count=t.result_count, results=t.results) for t in graphrag_result.trace]
 
-        # Run the async hybrid search (returns GraphRAGResult)
-        graphrag_result = await _run_tools_sequence(request.query)
-
-        qdrant_end = int((time.time() - start_time) * 1000)
-        trace.append(TraceStep(
-            name="Qdrant vector search",
-            startTime=qdrant_start,
-            endTime=qdrant_end,
-            duration=qdrant_end - qdrant_start,
-            details={"results_count": len(graphrag_result.qdrant_results)},
-        ))
-
-        # Step 3: Neo4j enrichment trace
-        neo4j_start = qdrant_end
-        neo4j_end = int((time.time() - start_time) * 1000)
-        trace.append(TraceStep(
-            name="Neo4j graph enrichment",
-            startTime=neo4j_start,
-            endTime=neo4j_end,
-            duration=neo4j_end - neo4j_start,
-            details={"tools_executed": list(graphrag_result.neo4j_results.keys())},
-        ))
-
-        # Step 4: Fusion summarization trace
-        fusion_start = neo4j_end
-        fusion_end = int((time.time() - start_time) * 1000)
-        trace.append(TraceStep(
-            name="Fusion summarization",
-            startTime=fusion_start,
-            endTime=fusion_end,
-            duration=fusion_end - fusion_start,
-            details={"mode": "graphrag"},
-        ))
-
-        total_latency = int((time.time() - start_time) * 1000)
-
-        # Format results for frontend
+        # Format Qdrant results for frontend
         formatted_results = []
-        for idx, result in enumerate(graphrag_result.qdrant_results):
+        for idx, result in enumerate(graphrag_result.qdrant_results[:request.limit]):
+            payload = result.get("payload", {})
+            paper = payload.get("paper", {})
             formatted_results.append({
-                "id": result.get("pmid", f"result-{idx}"),
-                "title": result.get("title", "Untitled"),
-                "abstract": result.get("abstract", ""),
-                "authors": result.get("authors", []),
-                "journal": result.get("journal", ""),
-                "year": result.get("year", ""),
-                "pmid": result.get("pmid", ""),
+                "id": paper.get("pmid") or result.get("id", f"result-{idx}"),
+                "title": paper.get("title", "Untitled"),
+                "abstract": paper.get("abstract", ""),
+                "authors": [
+                    (a.get("name", "") if isinstance(a, dict) else str(a))
+                    for a in paper.get("authors", [])
+                ],
+                "journal": paper.get("journal", ""),
+                "year": paper.get("publication_date", ""),
+                "pmid": paper.get("pmid", ""),
                 "score": result.get("score", 0),
-                "source": "qdrant",
             })
-
-        # Add Neo4j results if any
-        for tool_name, tool_results in graphrag_result.neo4j_results.items():
-            if isinstance(tool_results, list):
-                for idx, item in enumerate(tool_results):
-                    if isinstance(item, dict):
-                        formatted_results.append({
-                            "id": f"neo4j-{tool_name}-{idx}",
-                            "title": item.get("title", item.get("name", f"Neo4j result {idx}")),
-                            "details": item,
-                            "source": "neo4j",
-                            "tool": tool_name,
-                        })
 
         return SearchResponse(
             summary=graphrag_result.summary,
             results=formatted_results,
             trace=trace,
-            metadata={
-                "query": request.query,
-                "mode": request.mode,
-                "limit": request.limit,
-                "totalLatency": total_latency,
-                "qdrantResultsCount": len(graphrag_result.qdrant_results),
-                "neo4jToolsExecuted": list(graphrag_result.neo4j_results.keys()),
-            },
+            metadata={"query": request.query},
         )
 
     except Exception as e:
         logger.error(f"Search error: {e}")
-        total_latency = int((time.time() - start_time) * 1000)
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": f"Search failed: {str(e)}",
-                "trace": [t.model_dump() for t in trace],
-                "metadata": {"totalLatency": total_latency},
-            },
-        )
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 
 def main() -> None:
     """Run the server."""
+    import os
+
     import uvicorn
 
+    port = int(os.environ.get("PORT", "8765"))
     uvicorn.run(
         "biomedical_graphrag.api.server:app",
         host="0.0.0.0",
-        port=8765,
+        port=port,
         reload=False,
         log_level="info",
     )

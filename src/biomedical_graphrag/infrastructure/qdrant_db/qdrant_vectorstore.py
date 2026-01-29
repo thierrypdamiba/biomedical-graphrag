@@ -7,7 +7,6 @@ from qdrant_client.models import PointsList, models
 
 from biomedical_graphrag.config import settings
 
-# from biomedical_graphrag.domain.citation import CitationNetwork
 from biomedical_graphrag.domain.gene import GeneRecord
 from biomedical_graphrag.domain.paper import Paper
 from biomedical_graphrag.utils.logger_util import setup_logging
@@ -152,8 +151,6 @@ class AsyncQdrantVectorStore:
             batch_size (int): Number of points to process in each batch.
         """
         papers = pubmed_data.get("papers", [])
-        # citation_network_dict = pubmed_data.get("citation_network", {}) # pretty much meaningless for Qdrant, if having Neo4j & agent
-
         logger.info(f"📚 Starting ingestion of {len(papers)} papers with batch size {batch_size}")
 
         # Build PMID -> [GeneRecord] index
@@ -267,10 +264,6 @@ class AsyncQdrantVectorStore:
                         },
                         payload=payload,
                     )
-
-                    # Get citation network for this paper if available
-                    # citation_info = citation_network_dict.get(pmid, {})
-                    # citation_network = CitationNetwork(**citation_info) if citation_info else None
 
                     if only_new:
                         batch_upsert_operations.append(

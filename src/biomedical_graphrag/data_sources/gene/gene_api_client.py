@@ -138,25 +138,3 @@ class GeneAPIClient:
         logger.info(f"Fetched {len(all_summaries)} total gene summaries from {total_chunks} batches.")
         return all_summaries
 
-    async def link_pubmed(self, gene_id: str) -> list[str]:
-        """
-        For a given GeneID, return linked PubMed PMIDs via Entrez elink (async).
-        """
-
-        def _link() -> list[str]:
-            handle = Entrez.elink(dbfrom="gene", db="pubmed", id=gene_id)
-            record = Entrez.read(handle)
-            handle.close()
-
-            pmids: list[str] = []
-            try:
-                for linkset in record[0].get("LinkSetDb", []):
-                    if linkset.get("DbTo") == "pubmed":
-                        pmids.extend([link["Id"] for link in linkset.get("Link", [])])
-            except Exception as exc:  # noqa: BLE001
-                logger.warning(f"Failed to parse PubMed links for GeneID {gene_id}: {exc}")
-
-            logger.info(f"GeneID {gene_id} linked to {len(pmids)} PubMed PMIDs.")
-            return pmids
-
-        return await asyncio.to_thread(_link)

@@ -19,7 +19,7 @@ class AsyncQdrantQuery:
         """Close the async Qdrant client."""
         await self.qdrant_client.close()
 
-    async def retrieve_papers_dense(self, query: str, top_k: int = 3) -> list[dict]:
+    async def retrieve_papers_dense(self, query: str, top_k: int = 5) -> list[dict]:
         """
         Query the Qdrant vector store for similar papers (async).
         Vanilla dense search on quantized openAI embeddings.
@@ -63,7 +63,7 @@ class AsyncQdrantQuery:
         ]
         return results
 
-    async def retrieve_papers_hybrid(self, query: str, top_k: int = 3) -> list[dict]:
+    async def retrieve_papers_hybrid(self, query: str, top_k: int = 5) -> list[dict]:
         """
         Query the Qdrant vector search engine (async).
         Hybrid dense + lexical search, fused by reranking with text-embedding-3-large.
@@ -134,7 +134,7 @@ class AsyncQdrantQuery:
         self,
         positive_examples: list[str] | None,
         negative_examples: list[str] | None,
-        top_k: int = 3,
+        top_k: int = 5,
     ) -> list[dict]:
         """
         Recommend papers based on positive and negative examples (async).
