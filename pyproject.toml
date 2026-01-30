@@ -137,6 +137,8 @@ lint.select = [
 # Rules to ignore (none by default)
 lint.ignore = []
 
+lint.per-file-ignores."tests/**" = ["D102", "D103"]
+
 # Allow autofix for all enabled rules (when `--fix`) is provided.
 lint.fixable = ["ALL"]
 
