@@ -1,42 +1,31 @@
-# name: CI Pipeline
-# on:
-#   workflow_dispatch:
-#   # push:
-#   #   branches:
-#   #     - main
+name: CI Pipeline
+on:
+  push:
+    branches: [main, feature/*]
+  pull_request:
+    branches: [main]
 
-# jobs:
-#   lint-and-test:
-#     runs-on: ubuntu-latest
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
 
-#     steps:
-#       - name: Checkout code
-#         uses: actions/checkout@v4
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-#       - name: Install uv
-#         uses: astral-sh/setup-uv@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
-#       - name: Set up Python
-#         uses: actions/setup-python@v5
-#         with:
-#           python-version-file: .python-version
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
 
-#       - name: Install dependencies
-#         run: |
-#           uv sync --all-groups
+      - name: Install dependencies
+        run: uv sync --all-groups
 
-#       - name: Linting Check
-#         run: |
-#           uv run ruff check . --show-fixes
+      - name: Lint tests
+        run: uv run ruff check tests/ --show-fixes
 
-#       - name: Auto-format with Ruff
-#         run: |
-#           uv run ruff check . --fix --exit-non-zero-on-fix
-
-#       - name: Type check with mypy
-#         run: uv run mypy
-
-#       - name: Run tests
-#         env:
-#           AWS_REGION: ${{ secrets.AWS_REGION }}
-#         run: uv run pytest
+      - name: Run tests
+        run: uv run pytest --tb=short

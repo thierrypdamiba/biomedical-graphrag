@@ -64,6 +64,7 @@ lint = [
     { name = "ruff" },
 ]
 test = [
+    { name = "httpx" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
 ]
@@ -90,6 +91,7 @@ lint = [
     { name = "ruff", specifier = ">=0.14.0" },
 ]
 test = [
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "pytest", specifier = ">=8.4.2" },
     { name = "pytest-asyncio", specifier = ">=1.2.0" },
 ]
