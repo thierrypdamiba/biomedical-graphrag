@@ -63,17 +63,17 @@ custom-graph-query: ## Run a custom natural language query using Neo4j GraphRAG 
 #################################################################################
 create-qdrant-collection: ## Create the Qdrant collection for embeddings
 	@echo "Creating Qdrant collection for embeddings..."
-	uv run src/biomedical_graphrag/infrastructure/qdrant_db/create_collection.py
+	uv run src/biomedical_graphrag/infrastructure/qdrant_engine/create_collection.py
 	@echo "Qdrant collection creation complete."
 
 delete-qdrant-collection: ## Delete the Qdrant collection for embeddings
 	@echo "Deleting Qdrant collection for embeddings..."
-	uv run src/biomedical_graphrag/infrastructure/qdrant_db/delete_collection.py
+	uv run src/biomedical_graphrag/infrastructure/qdrant_engine/delete_collection.py
 	@echo "Qdrant collection deletion complete."
 
 ingest-qdrant-data: ## Ingest embeddings into the Qdrant collection
 	@echo "Ingesting embeddings into the Qdrant collection..."
-	uv run src/biomedical_graphrag/infrastructure/qdrant_db/qdrant_ingestion.py
+	uv run src/biomedical_graphrag/infrastructure/qdrant_engine/qdrant_ingestion.py
 	@echo "Embeddings ingestion complete."
 
 custom-qdrant-query: ## Run a custom query on the Qdrant collection (modify the --ask parameter as needed)

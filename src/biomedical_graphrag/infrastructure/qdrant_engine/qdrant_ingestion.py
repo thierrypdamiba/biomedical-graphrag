@@ -1,6 +1,6 @@
 import asyncio
 
-from biomedical_graphrag.infrastructure.qdrant_db.qdrant_vectorstore import AsyncQdrantVectorStore
+from biomedical_graphrag.infrastructure.qdrant_engine.qdrant_vectorstore import AsyncQdrantVectorStore
 from biomedical_graphrag.utils.json_util import load_gene_json, load_pubmed_json
 from biomedical_graphrag.utils.logger_util import setup_logging
 

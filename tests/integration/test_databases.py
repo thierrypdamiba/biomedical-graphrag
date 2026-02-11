@@ -6,7 +6,7 @@ import pytest
 
 from biomedical_graphrag.config import Neo4jSettings, QdrantSettings
 from biomedical_graphrag.infrastructure.neo4j_db.neo4j_client import AsyncNeo4jClient
-from biomedical_graphrag.infrastructure.qdrant_db.qdrant_vectorstore import AsyncQdrantVectorStore
+from biomedical_graphrag.infrastructure.qdrant_engine.qdrant_vectorstore import AsyncQdrantVectorStore
 
 
 class TestQdrantIntegration:
@@ -16,7 +16,7 @@ class TestQdrantIntegration:
     async def test_qdrant_vectorstore_initialization(self) -> None:
         """Test that QdrantVectorStore can be initialized with settings."""
         with patch(
-            "biomedical_graphrag.infrastructure.qdrant_db.qdrant_vectorstore.settings"
+            "biomedical_graphrag.infrastructure.qdrant_engine.qdrant_vectorstore.settings"
         ) as mock_settings:
             mock_settings.qdrant.url = "http://localhost:6333"
             mock_settings.qdrant.api_key.get_secret_value.return_value = "test-key"
@@ -27,7 +27,7 @@ class TestQdrantIntegration:
             mock_settings.openai.api_key.get_secret_value.return_value = "test-openai-key"
 
             with patch(
-                "biomedical_graphrag.infrastructure.qdrant_db.qdrant_vectorstore.AsyncQdrantClient"
+                "biomedical_graphrag.infrastructure.qdrant_engine.qdrant_vectorstore.AsyncQdrantClient"
             ) as mock_client_class:
                 mock_client = AsyncMock()
                 mock_client_class.return_value = mock_client

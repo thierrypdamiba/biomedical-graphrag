@@ -1,6 +1,6 @@
 from qdrant_client.models import models
 
-from biomedical_graphrag.infrastructure.qdrant_db.qdrant_vectorstore import AsyncQdrantVectorStore
+from biomedical_graphrag.infrastructure.qdrant_engine.qdrant_vectorstore import AsyncQdrantVectorStore
 from biomedical_graphrag.utils.logger_util import setup_logging
 
 logger = setup_logging()
