@@ -139,7 +139,7 @@ class AsyncQdrantVectorStore:
         )
 
     async def upsert_points(
-        self, pubmed_data: dict[str, Any], gene_data: dict[str, Any] | None = None, only_new: bool = False, batch_size: int = 30
+        self, pubmed_data: dict[str, Any], gene_data: dict[str, Any] | None = None, only_new: bool = False, batch_size: int = 32
     ) -> None:
         """
         Upsert points into a collection from pubmed_dataset.json structure,
@@ -324,9 +324,7 @@ class AsyncQdrantVectorStore:
                         try:
                             await self.client.upsert(
                                 collection_name=self.collection_name,
-                                points=PointsList(
-                                    points=batch_points,
-                                ),
+                                points=batch_points,
                             )
                             total_skipped += batch_skipped
                             total_processed += len(batch_points)
