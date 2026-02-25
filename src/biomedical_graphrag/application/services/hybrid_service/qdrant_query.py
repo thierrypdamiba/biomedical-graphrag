@@ -21,7 +21,7 @@ class AsyncQdrantQuery:
 
     async def retrieve_papers_dense(self, query: str, top_k: int = 5) -> list[dict]:
         """
-        Query the Qdrant vector store for similar papers (async).
+        Query the Qdrant vector search engine for similar papers (async).
         Vanilla dense search on quantized openAI embeddings.
 
         Args:

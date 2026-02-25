@@ -1,9 +1,9 @@
 """
-Qdrant vector-search tool definitions.
+Qdrant tool definitions for hybrid retrieval and recommendations.
 """
 
 # ----------------------------
-# Qdrant Vector Search tools definition
+# Qdrant tools definition
 # ----------------------------
 
 QDRANT_TOOLS = [

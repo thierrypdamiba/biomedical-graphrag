@@ -1,4 +1,4 @@
-"""Prompts for hybrid GraphRAG querying.
+"""Prompts for context engineering.
 
 This package exports the prompt templates/helpers used by the hybrid service.
 """

@@ -52,4 +52,4 @@ async def ingest_data(recreate: bool = False, only_new: bool = True) -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(ingest_data(recreate=False, only_new=True))
+    asyncio.run(ingest_data(recreate=True, only_new=False))

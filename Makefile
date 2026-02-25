@@ -48,14 +48,9 @@ delete-graph: ## Delete all nodes and relationships in the Neo4j graph
 	uv run src/biomedical_graphrag/infrastructure/neo4j_db/delete_graph.py
 	@echo "Neo4j graph deletion complete."
 
-example-graph-query: ## Run example queries on the Neo4j graph using GraphRAG
-	@echo "Running example queries on the Neo4j graph..."
-	uv run src/biomedical_graphrag/application/cli/fusion_query.py --examples
-	@echo "Example queries complete."
-
-custom-graph-query: ## Run a custom natural language query using Neo4j GraphRAG (use QUESTION="your question")
-	@echo "Running custom query on the Neo4j graph with GraphRAG..."
-	uv run src/biomedical_graphrag/application/cli/fusion_query.py $(if $(QUESTION),--ask "$(QUESTION)")
+custom-graph-query: ## Run a custom natural language query (use QUESTION="your question")
+	@echo "Running custom query..."
+	uv run src/biomedical_graphrag/application/cli/fusion_query.py "$(QUESTION)"
 	@echo "Custom query complete."
 
 #################################################################################
@@ -75,11 +70,6 @@ ingest-qdrant-data: ## Ingest embeddings into the Qdrant collection
 	@echo "Ingesting embeddings into the Qdrant collection..."
 	uv run src/biomedical_graphrag/infrastructure/qdrant_engine/qdrant_ingestion.py
 	@echo "Embeddings ingestion complete."
-
-custom-qdrant-query: ## Run a custom query on the Qdrant collection (modify the --ask parameter as needed)
-	@echo "Running custom query on the Qdrant collection..."
-	uv run src/biomedical_graphrag/application/cli/query_vectorstore.py $(if $(QUESTION),--ask "$(QUESTION)")
-	@echo "Custom query complete."
 
 #################################################################################
 ## API Server Commands

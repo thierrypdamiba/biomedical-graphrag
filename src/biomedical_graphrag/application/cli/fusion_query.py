@@ -1,7 +1,7 @@
 """
-CLI for hybrid GraphRAG querying:
-1. Retrieve relevant papers from Qdrant based on the tool selected.
-2. Use LLM to select and run Neo4j enrichment tools.
+CLI for context engineering pipeline:
+1. Retrieve relevant papers from Qdrant (hybrid retrieval or recommendations).
+2. Use LLM to select and run Neo4j graph enrichment tools.
 3. Fuse both sources into one concise biomedical summary.
 """
 
@@ -36,7 +36,7 @@ async def main() -> None:
         answer = await run_tools_sequence_and_summarize(question)
 
         print("\n=== Unified Biomedical Answer ===\n")
-        print(answer)
+        print(answer.summary)
     except Exception as e:
         logger.error(f"Error during query processing: {e}")
         raise
