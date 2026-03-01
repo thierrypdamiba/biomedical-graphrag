@@ -32,7 +32,7 @@ class AsyncQdrantQuery:
         """
         if self.qdrant_client.cloud_inference:
             dense_vector = self.qdrant_client._define_openai_vectors(
-                query, dimensions=self.qdrant_client.embedding_dimension
+                query, mrl_dimensions=self.qdrant_client.embedding_dimension
             )
         else:
             dense_vector = await self.qdrant_client._get_openai_vectors(
@@ -76,10 +76,10 @@ class AsyncQdrantQuery:
         """
         if self.qdrant_client.cloud_inference:
             retriever_vector = self.qdrant_client._define_openai_vectors(
-                query, dimensions=self.qdrant_client.embedding_dimension
+                query, mrl_dimensions=self.qdrant_client.embedding_dimension
             )
             reranker_vector = self.qdrant_client._define_openai_vectors(
-                query, dimensions=self.qdrant_client.reranker_embedding_dimension
+                query, mrl_dimensions=self.qdrant_client.reranker_embedding_dimension
             )
         else:
             openai_vector = await self.qdrant_client._get_openai_vectors(
@@ -152,7 +152,7 @@ class AsyncQdrantQuery:
             if positive_examples:
                 positive_vectors = [
                     self.qdrant_client._define_openai_vectors(
-                        pos_example, dimensions=self.qdrant_client.embedding_dimension
+                        pos_example, mrl_dimensions=self.qdrant_client.embedding_dimension
                     )
                     for pos_example in positive_examples
                 ]
@@ -161,7 +161,7 @@ class AsyncQdrantQuery:
             if negative_examples:
                 negative_vectors = [
                     self.qdrant_client._define_openai_vectors(
-                        neg_example, dimensions=self.qdrant_client.embedding_dimension
+                        neg_example, mrl_dimensions=self.qdrant_client.embedding_dimension
                     )
                     for neg_example in negative_examples
                 ]

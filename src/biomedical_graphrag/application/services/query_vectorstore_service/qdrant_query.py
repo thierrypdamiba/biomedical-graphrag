@@ -46,7 +46,7 @@ class AsyncQdrantQuery:
             List of dictionaries containing the top_k similar documents.
         """
         if self.cloud_inference:
-            dense_vector = self.qdrant_client._define_openai_vectors(question, dimensions=self.embedding_dimension)
+            dense_vector = self.qdrant_client._define_openai_vectors(question, mrl_dimensions=self.embedding_dimension)
         else:
             dense_vector = await self.qdrant_client._get_openai_vectors(question, dimensions=self.embedding_dimension)
 
@@ -86,10 +86,10 @@ class AsyncQdrantQuery:
         """
         if self.cloud_inference:
             retriever_vector = self.qdrant_client._define_openai_vectors(
-                question, dimensions=self.embedding_dimension
+                question, mrl_dimensions=self.embedding_dimension
             )
             reranker_vector = self.qdrant_client._define_openai_vectors(
-                question, dimensions=self.reranker_embedding_dimension
+                question, mrl_dimensions=self.reranker_embedding_dimension
             )
         else:
             openai_vector = await self.qdrant_client._get_openai_vectors(
