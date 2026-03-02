@@ -1,6 +1,6 @@
 from qdrant_client.models import models
 
-from biomedical_graphrag.infrastructure.qdrant_db.qdrant_vectorstore import AsyncQdrantVectorStore
+from biomedical_graphrag.infrastructure.qdrant_engine.qdrant_vectorstore import AsyncQdrantVectorStore
 from biomedical_graphrag.utils.logger_util import setup_logging
 
 logger = setup_logging()
@@ -21,7 +21,7 @@ class AsyncQdrantQuery:
 
     async def retrieve_papers_dense(self, query: str, top_k: int = 5) -> list[dict]:
         """
-        Query the Qdrant vector store for similar papers (async).
+        Query the Qdrant vector search engine for similar papers (async).
         Vanilla dense search on quantized openAI embeddings.
 
         Args:

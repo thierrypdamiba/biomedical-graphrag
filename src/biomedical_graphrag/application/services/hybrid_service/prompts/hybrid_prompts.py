@@ -1,4 +1,4 @@
-"""Prompt templates for hybrid GraphRAG querying."""
+"""Prompt templates for context engineering."""
 
 import json
 from typing import Any

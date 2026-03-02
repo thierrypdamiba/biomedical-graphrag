@@ -1,7 +1,7 @@
 [project]
 name = "biomedical-graphrag"
 version = "0.1.0"
-description = "GraphRAG system for biomedical research, combining knowledge graphs and vector search"
+description = "Context engineering for biomedical research, combining Qdrant vector search engine and Neo4j graph database"
 readme = "README.md"
 authors = [
     {name = "Benito Martin"}
@@ -14,8 +14,6 @@ dependencies = [
     "fastapi>=0.115.0",
     "loguru>=0.7.3",
     "neo4j>=5.28.2",
-    "neo4j-graphrag>=1.10.0",
-    "nest-asyncio>=1.5.8",
     "openai>=1.0.0",
     "pydantic>=2.12.0",
     "pydantic-settings>=2.11.0",

@@ -1,6 +1,6 @@
 import asyncio
 
-from biomedical_graphrag.infrastructure.qdrant_db.qdrant_vectorstore import AsyncQdrantVectorStore
+from biomedical_graphrag.infrastructure.qdrant_engine.qdrant_vectorstore import AsyncQdrantVectorStore
 
 
 async def create_collection() -> None:

@@ -64,7 +64,7 @@ async def _preload_services() -> None:
 
 app = FastAPI(
     title="PubMed Navigator API",
-    description="Hybrid search API combining Qdrant vector search with Neo4j knowledge graph",
+    description="Context engineering API combining Qdrant vector search engine with Neo4j graph database",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -84,8 +84,8 @@ class SearchRequest(BaseModel):
     """Search request body."""
 
     query: str = Field(..., description="The search query")
-    limit: int = Field(default=5, ge=1, le=5, description="Maximum number of results")
-    mode: str = Field(default="graphrag", description="Search mode: graphrag, dense, sparse, hybrid")
+    limit: int = Field(default=5, ge=1, le=5, description="Maximum number of results (vector search)")
+    mode: str = Field(default="graphrag", description="Search mode: graphrag (Qdrant + Neo4j context engineering)")
 
 
 class TraceStep(BaseModel):
@@ -188,9 +188,9 @@ async def get_neo4j_stats() -> Neo4jStatsResponse:
 @app.post("/api/graphrag-query", response_model=SearchResponse)
 async def search(request: SearchRequest) -> SearchResponse:
     """
-    Perform hybrid GraphRAG search.
+    Run context engineering pipeline.
 
-    Combines Qdrant vector search with Neo4j knowledge graph enrichment.
+    Combines Qdrant vector search engine with Neo4j graph enrichment and fuses the results.
     """
     try:
         _load_services()
