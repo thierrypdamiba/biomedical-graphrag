@@ -31,11 +31,9 @@
     - [Data Collection](#data-collection)
     - [Infrastructure Setup](#infrastructure-setup)
       - [Neo4j Graph Database](#neo4j-graph-database)
-      - [Qdrant Vector Database](#qdrant-vector-database)
+      - [Qdrant Vector Search Engine](#qdrant-vector-search-engine)
     - [Query Commands](#query-commands)
-      - [Qdrant Vector Search](#qdrant-vector-search)
       - [Hybrid Neo4j + Qdrant Queries](#hybrid-neo4j--qdrant-queries)
-      - [Available Query Types](#available-query-types)
       - [Sample Queries](#sample-queries)
     - [API Server](#api-server)
     - [Frontend](#frontend)
@@ -46,15 +44,20 @@
 
 ## Overview
 
-A comprehensive GraphRAG (Graph Retrieval-Augmented Generation) system designed for biomedical research. It combines knowledge graphs with vector search engine to provide intelligent querying and analysis of biomedical literature and genomic data.
+A biomedical context engineering system. An agent uses Qdrant vector search engine tools (hybrid retrieval, recommendations) and Neo4j graph database tools (graph enrichment) to gather context, then fuses it into a single biomedical answer.
 
-Article: [Building a Biomedical GraphRAG: When Knowledge Graphs Meet Vector Search](https://aiechoes.substack.com/p/building-a-biomedical-graphrag-when)
+> Originally forked from [benitomartin/biomedical-graphrag](https://github.com/benitomartin/biomedical-graphrag).
+
+**References:**
+- Video: [PubMed Navigator](https://www.youtube.com/watch?v=3NWTi90i6C4)
+- Article: [Building a Biomedical GraphRAG: When Knowledge Graphs Meet Vector Search](https://aiechoes.substack.com/p/building-a-biomedical-graphrag-when)
 
 **Key Features:**
 
-- **Hybrid Query System**: Combines Neo4j graph database with Qdrant vector search engine for comprehensive biomedical insights
+- **Context Engineering**: Agent orchestrates Qdrant and Neo4j tools, fusing results into a single answer
+- **Qdrant Vector Search Engine**: Hybrid retrieval (dense + BM25 with reranking) and constraint-based recommendations
+- **Neo4j Graph Database**: Graph enrichment via ontology-based tools (collaborator networks, MeSH relations, gene co-mentions)
 - **Data Integration**: Processes PubMed papers, gene data, and research citations
-- **Intelligent Querying**: Uses LLM-powered tool selection for graph enrichment and hybrid (semantic + lexical) search
 - **Biomedical Schema**: Specialized graph schema for papers, authors, institutions, genes, and MeSH terms
 - **Async Processing**: High-performance async data collection and processing
 
@@ -67,7 +70,7 @@ biomedical-graphrag/
 ├── src/
 │   └── biomedical_graphrag/
 │       ├── api/                # FastAPI server
-│       │   └── server.py       # GraphRAG API endpoints
+│       │   └── server.py       # PubMed Navigator API endpoints
 │       ├── application/        # Application layer
 │       │   ├── cli/            # Command-line interfaces
 │       │   └── services/       # Business logic services
@@ -102,7 +105,7 @@ biomedical-graphrag/
 1. Clone the repository:
 
    ```bash
-   git clone git@github.com:benitomartin/biomedical-graphrag.git
+   git clone git@github.com:thierrypdamiba/biomedical-graphrag.git
    cd biomedical-graphrag
    ```
 
@@ -127,7 +130,7 @@ biomedical-graphrag/
 1. Create a `.env` file in the root directory:
 
    ```bash
-    cp env.example .env
+    cp .env.example .env
    ```
 
 ## Usage
@@ -221,7 +224,7 @@ make delete-qdrant-collection
 Notes:
 
 - Embeddings are built from **PubMed paper abstracts**.
-- This project uses OpenAI eembeddings **Matryoshka Representation Learning (MRL)** feature:
+- This project uses OpenAI embeddings **Matryoshka Representation Learning (MRL)** feature:
   - `QDRANT__EMBEDDING_DIMENSION` is the prefix dimension used for **retrieval** (stored in Qdrant as the `Dense` vector).
   - `QDRANT__RERANKER_EMBEDDING_DIMENSION` is the (larger) prefix dimension used for **reranking** (stored in Qdrant as the `Reranker` vector).
 - `make ingest-qdrant-data` currently recreates the collection each run (see `qdrant_ingestion.py`).
@@ -233,48 +236,27 @@ Notes:
 
 ### Query Commands
 
-#### Qdrant Vector Search
-
-```bash
-# Run a custom query on the Qdrant vector store
-make custom-qdrant-query QUESTION="Which institutions have collaborated most frequently on papers about 'Gene Editing' and 'Immunotherapy'?"
-
-# Or run directly with the CLI
-uv run src/biomedical_graphrag/application/cli/query_vectorstore.py --ask "Which institutions have collaborated most frequently on papers about 'Gene Editing' and 'Immunotherapy'?"
-```
-
 #### Hybrid Neo4j + Qdrant Queries
 
 ```bash
-# Run example queries on the Neo4j graph using GraphRAG
-make example-graph-query
-
-# Run a custom natural language query using hybrid GraphRAG
+# Run a custom natural language query
 make custom-graph-query QUESTION="What are the latest research trends in cancer immunotherapy?"
 
 # Or run directly with the CLI (positional args)
 uv run src/biomedical_graphrag/application/cli/fusion_query.py "What are the latest research trends in cancer immunotherapy?"
 ```
 
-#### Available Query Types
+The hybrid query system combines vector search engine (Qdrant) with graph enrichment (Neo4j):
+- Author collaboration networks
+- Citation analysis and paper relationships
+- Gene-paper associations
+- MeSH term relationships
+- Institution affiliations
 
-**Qdrant Queries:**
-
-- Semantic search across paper abstracts and content
-- Similarity-based retrieval using embeddings and BM25 fusion
-
-**Hybrid Queries:**
-
-- Combines vector search engine (Qdrant) with graph enrichment (Neo4j):
-  - Author collaboration networks
-  - Citation analysis and paper relationships
-  - Gene-paper associations
-  - MeSH term relationships
-  - Institution affiliations
-- LLM-powered tool selection & fusion:
-  - Runs one Qdrant tool: hybrid retrieval (BM25 + dense & reranking) or recommendations with contraints, - to fetch relevant papers.
-  - Calls Neo4j enrichment tools for graph evidence.
-  - Produces one fused answer from both sources.
+LLM-powered tool selection & fusion:
+- Runs one Qdrant tool: hybrid retrieval (BM25 + dense & reranking) or recommendations with constraints — to fetch relevant papers.
+- Calls Neo4j enrichment tools for graph evidence.
+- Produces one fused answer from both sources.
 
 Output:
 
@@ -283,27 +265,12 @@ Output:
 #### Sample Queries
 
 - Who collaborates with Jennifer Doudna on CRISPR research?
-  Which researchers work with Emmanuelle Charpentier on gene editing or genome engineering papers?
-
-- Who are George Church’s collaborators publishing on synthetic biology and genome sequencing?
-
-- List scientists collaborating with Feng Zhang on neuroscience studies
-
-- Which papers are related to PMID 31295471 based on shared MeSH terms?
-
-- Find papers similar to the CRISPR-Cas9 genome editing study with PMID 31295471
-
-- Show other studies linked by MeSH terms to PMID 27562951
-
-- Which genes are mentioned in the same papers as gag?
-
-- What genes appear together with HIF1A in cancer research?
 
 - Which genes are frequently co-mentioned with TP53?
 
 ### API Server
 
-The project includes a FastAPI server that exposes the GraphRAG functionality via HTTP endpoints:
+The project includes a FastAPI server (PubMed Navigator) that exposes the context engineering pipeline via HTTP endpoints:
 
 ```bash
 # Start the API server (runs on port 8765)
@@ -316,21 +283,28 @@ make run-api
 |--------|----------|-------------|
 | GET | `/health` | Health check |
 | GET | `/api/neo4j/stats` | Neo4j graph statistics (node/relationship counts) |
-| POST | `/api/search` | Hybrid GraphRAG search |
+| POST | `/api/graphrag-query` | Context engineering search (Qdrant + Neo4j) |
 
 **Search Request Example:**
 
 ```bash
-curl -X POST http://localhost:8765/api/search \
+curl -X POST http://localhost:8765/api/graphrag-query \
   -H "Content-Type: application/json" \
-  -d '{"query": "What genes are associated with breast cancer?", "limit": 10}'
+  -d '{"query": "What genes are associated with breast cancer?", "limit": 5}'
 ```
 
 ### Frontend
 
-The frontend is maintained in a separate repository:
+The frontend is maintained in a separate repository: **[biomedical-graphrag-frontend](https://github.com/thierrypdamiba/biomedical-graphrag-frontend)**
 
-**[biomedical-graphrag-frontend](https://github.com/thierrypdamiba/biomedical-graphrag-frontend)**
+The quickest way to run it locally:
+
+```bash
+# Auto-clones the frontend repo and starts it (requires pnpm)
+make run-frontend
+```
+
+Or manually:
 
 ```bash
 git clone https://github.com/thierrypdamiba/biomedical-graphrag-frontend.git
@@ -359,7 +333,7 @@ curl http://localhost:8765/health
 ### Troubleshooting
 
 - **Make fails immediately with ".env file is missing"**
-  - Create it with `cp env.example .env` and fill in required values.
+  - Create it with `cp .env.example .env` and fill in required values.
 
 - **Qdrant ingestion/query fails**
   - Confirm Qdrant is running and `QDRANT__URL` points to it.

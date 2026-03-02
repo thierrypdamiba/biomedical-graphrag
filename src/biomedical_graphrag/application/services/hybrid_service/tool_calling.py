@@ -28,7 +28,7 @@ logger = setup_logging()
 openai_client = OpenAI(api_key=settings.openai.api_key.get_secret_value())
 
 
-def _extract_qdrant_context(qdrant_results: list[dict]) -> dict[str, list[str]]:
+def _extract_qdrant_context(qdrant_results: list[dict]) -> dict[str, list[str]]: #Is it a reverse engineering approach of Paper class?
     """Extract structured entities from Qdrant results for Neo4j tool pre-fill."""
     pmids: list[str] = []
     authors: list[str] = []
@@ -58,7 +58,7 @@ def _extract_qdrant_context(qdrant_results: list[dict]) -> dict[str, list[str]]:
     }
 
 
-def _score_authors(neo4j: Neo4jGraphQuery, authors: list[str], mesh_terms: list[str]) -> list[str]:
+def _score_authors(neo4j: Neo4jGraphQuery, authors: list[str], mesh_terms: list[str]) -> list[str]: #Might be problematic because terms have different importance to a person using the assistant
     """Score authors by paper count on relevant topics. Returns 'Name (N papers)' sorted by count."""
     if not authors:
         return []
@@ -212,7 +212,7 @@ def run_graph_enrichment(question: str, qdrant_results: list[dict]) -> Neo4jEnri
 
         results: dict[str, Any] = {}
         tool_call_counts: dict[str, int] = {}
-        max_calls_per_tool = 3
+        max_calls_per_tool = 3 #TBD
 
         if response.output:
             for tool_call in response.output:
@@ -243,7 +243,7 @@ def run_graph_enrichment(question: str, qdrant_results: list[dict]) -> Neo4jEnri
                             count = len(result) if isinstance(result, list) else None
                         except Exception as e:
                             logger.error(f"Neo4j tool {name} failed: {e}")
-                            results[name] = f"Error: {e}"
+                            results[name] = f"Error: {e}" #This is dangerous, we leak errors which can be showing some sensitive information
                             result = None
                             count = 0
                         tools_executed.append(ToolExecution(name=name, arguments=args, result_count=count, results=result))
