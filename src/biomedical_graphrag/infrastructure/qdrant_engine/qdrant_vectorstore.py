@@ -103,14 +103,14 @@ class AsyncQdrantVectorStore:
             logger.error(f"❌ Failed to create embedding: {e}")
             raise
 
-    def _define_openai_vectors(self, text: str, dimensions: int = 1536) -> models.Document:
+    def _define_openai_vectors(self, text: str, mrl_dimensions: int = 1536) -> models.Document:
         """
         Wrap text in models.Document to handle OpenAI embeddings inference
         through Qdrant's Cloud.
 
         Args:
                 text (str): Input text.
-                dimensions (int): Number of dimensions for the embedding. https://platform.openai.com/docs/api-reference/embeddings/create#embeddings-create-dimensions
+                mrl_dimensions (int): Number of MRL dimensions for the embedding. https://platform.openai.com/docs/api-reference/embeddings/create#embeddings-create-dimensions
         Returns:
                 models.Document: Document object.
         """
@@ -119,7 +119,7 @@ class AsyncQdrantVectorStore:
             model=f"openai/{settings.qdrant.embedding_model}",
             options={
                 "openai-api-key": settings.openai.api_key.get_secret_value(),
-                "dimensions": dimensions,
+                "mrl": mrl_dimensions,
             },
         )
 
@@ -243,10 +243,10 @@ class AsyncQdrantVectorStore:
 
                     if self.cloud_inference:
                         retriever_vector = self._define_openai_vectors(
-                            abstract, dimensions=self.embedding_dimension
+                            abstract, mrl_dimensions=self.embedding_dimension
                         )
                         reranker_vector = self._define_openai_vectors(
-                            abstract, dimensions=self.reranker_embedding_dimension
+                            abstract, mrl_dimensions=self.reranker_embedding_dimension
                         )
                     else:
                         openai_vector = await self._get_openai_vectors(abstract, dimensions=self.reranker_embedding_dimension)  # MRL, https://platform.openai.com/docs/guides/embeddings#use-cases
