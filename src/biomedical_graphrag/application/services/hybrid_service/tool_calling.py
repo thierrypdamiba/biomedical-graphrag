@@ -242,8 +242,8 @@ def run_graph_enrichment(question: str, qdrant_results: list[dict]) -> Neo4jEnri
                             results[name] = result
                             count = len(result) if isinstance(result, list) else None
                         except Exception as e:
-                            logger.error(f"Neo4j tool {name} failed: {e}")
-                            results[name] = f"Error: {e}" #This is dangerous, we leak errors which can be showing some sensitive information
+                            logger.error(f"Neo4j tool {name} failed: {e}", exc_info=True)
+                            results[name] = f"Tool '{name}' encountered an error and returned no results."
                             result = None
                             count = 0
                         tools_executed.append(ToolExecution(name=name, arguments=args, result_count=count, results=result))

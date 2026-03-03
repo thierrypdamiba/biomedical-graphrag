@@ -181,8 +181,8 @@ async def get_neo4j_stats() -> Neo4jStatsResponse:
             neo4j.close()
 
     except Exception as e:
-        logger.error(f"Error fetching Neo4j stats: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch Neo4j stats: {str(e)}")
+        logger.error(f"Error fetching Neo4j stats: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch Neo4j stats")
 
 
 @app.post("/api/graphrag-query", response_model=SearchResponse)
@@ -228,8 +228,8 @@ async def search(request: SearchRequest) -> SearchResponse:
         )
 
     except Exception as e:
-        logger.error(f"Search error: {e}")
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+        logger.error(f"Search error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Search failed")
 
 
 def main() -> None:
