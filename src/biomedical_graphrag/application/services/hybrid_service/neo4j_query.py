@@ -63,9 +63,11 @@ class Neo4jGraphQuery:
         """
         Get collaborators for an author filtered by MeSH topics.
         Uses case-insensitive CONTAINS matching for flexibility.
-        Optionally excludes papers already retrieved by Qdrant.
+        Note: exclude_pmids is accepted but intentionally not applied here.
+        Collaborator networks should be computed across all shared papers,
+        including those already retrieved by Qdrant, since the goal is to
+        surface people (not new papers).
         """
-        exclude_pmids = exclude_pmids or []
         if require_all:
             topic_clauses = "\n".join(
                 f"MATCH (p)-[:HAS_MESH_TERM]->(m{i}:MeshTerm) WHERE toLower(m{i}.term) CONTAINS toLower($topic_{i})"
@@ -74,21 +76,19 @@ class Neo4jGraphQuery:
             cypher = f"""
                 MATCH (a1:Author)-[:WROTE]->(p:Paper)<-[:WROTE]-(a2:Author)
                 WHERE toLower(a1.name) CONTAINS toLower($author_name) AND a1 <> a2
-                  AND NOT p.pmid IN $exclude_pmids
                 WITH DISTINCT a2, p
                 {topic_clauses}
                 RETURN DISTINCT a2.name as collaborator, COUNT(DISTINCT p) as papers
                 ORDER BY papers DESC
                 LIMIT 10
             """
-            params: dict[str, Any] = {"author_name": author_name, "exclude_pmids": exclude_pmids}
+            params: dict[str, Any] = {"author_name": author_name}
             for i, topic in enumerate(topics):
                 params[f"topic_{i}"] = topic
         else:
             cypher = """
                 MATCH (a1:Author)-[:WROTE]->(p:Paper)<-[:WROTE]-(a2:Author)
                 WHERE toLower(a1.name) CONTAINS toLower($author_name) AND a1 <> a2
-                  AND NOT p.pmid IN $exclude_pmids
                 WITH DISTINCT a2, p
                 MATCH (p)-[:HAS_MESH_TERM]->(m:MeshTerm)
                 WHERE ANY(topic IN $topics WHERE toLower(m.term) CONTAINS toLower(topic))
@@ -98,7 +98,7 @@ class Neo4jGraphQuery:
                 ORDER BY papers DESC
                 LIMIT 10
             """
-            params = {"author_name": author_name, "topics": topics, "exclude_pmids": exclude_pmids}
+            params = {"author_name": author_name, "topics": topics}
         return self.query(cypher, params)
 
     def get_related_papers_by_mesh(

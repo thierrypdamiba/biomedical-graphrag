@@ -86,7 +86,7 @@ Rules:
 - Always cite PMIDs inline like (PMID: 12345678)
 - Be precise and factual, no speculation
 - Keep each section focused and concise
-- Write Graph Insights for EVERY non-empty Neo4j tool result. Only skip Graph Insights entirely if ALL Neo4j tools returned empty arrays.
+- Write Graph Insights for EVERY Neo4j tool that was called. For tools that returned results, summarize what was found. For tools that returned empty, briefly note what was searched and that no matches were found (e.g. "No collaborators found for Author X on these topics"). This helps the researcher understand what the graph does and does not contain.
 - Do NOT mention "Qdrant" or "Neo4j" by name. Refer to them as "retrieved literature" and "knowledge graph"
 
 User Question:
@@ -124,11 +124,9 @@ def fusion_summary_prompt(
     Returns:
         The fusion summary prompt.
     """
-    # Filter out empty tool results so the LLM focuses on what actually returned data
-    filtered_neo4j = {k: v for k, v in neo4j_results.items() if v}
     return FUSION_SUMMARY_PROMPT.format(
         question=question,
         qdrant_context=_format_qdrant_points(qdrant_results),
-        neo4j_results=json.dumps(filtered_neo4j, indent=2) if filtered_neo4j else "No graph results.",
+        neo4j_results=json.dumps(neo4j_results, indent=2),
         limit=limit,
     )
