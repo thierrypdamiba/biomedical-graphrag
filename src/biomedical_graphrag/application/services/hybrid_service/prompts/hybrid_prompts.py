@@ -73,7 +73,10 @@ Format your response using this exact markdown structure:
 A numbered list of exactly {limit} finding(s) — one per retrieved paper. Each finding should reference the source paper by PMID (e.g. PMID: 12345678). Be specific and cite data points. Do NOT add extra findings beyond the {limit} retrieved paper(s).
 
 ### Graph Insights
-Describe what the Neo4j knowledge graph revealed — gene relationships, author networks, institutional connections, or disease associations that extend beyond what the papers alone show. Use bullet points (- ) for each insight.
+Describe what the Neo4j knowledge graph revealed. Use bullet points (- ) for each insight. Consider ALL of the following if present in the Neo4j results:
+- **Related papers by MeSH terms**: papers sharing MeSH descriptors with the retrieved papers (look for get_related_papers_by_mesh results). Mention the titles and shared term counts.
+- **Collaborator networks**: co-authors filtered by topic (look for get_collaborators_with_topics results). Mention names and paper counts.
+- **Gene co-occurrence**: genes mentioned in the same papers (look for get_genes_in_same_papers results).
 
 ### Synthesis
 A concise paragraph combining both sources into a cohesive answer. Mention how graph data confirms, extends, or adds context to the paper findings. End with any limitations or gaps.
@@ -81,10 +84,10 @@ A concise paragraph combining both sources into a cohesive answer. Mention how g
 Rules:
 - Use **bold** for gene names, drug names, and key terms
 - Always cite PMIDs inline like (PMID: 12345678)
-- Be precise and factual — no speculation
+- Be precise and factual, no speculation
 - Keep each section focused and concise
-- If Neo4j returned no useful results, skip the Graph Insights section
-- Do NOT mention "Qdrant" or "Neo4j" by name — refer to them as "retrieved literature" and "knowledge graph"
+- Write Graph Insights for EVERY non-empty Neo4j tool result. Only skip Graph Insights entirely if ALL Neo4j tools returned empty arrays.
+- Do NOT mention "Qdrant" or "Neo4j" by name. Refer to them as "retrieved literature" and "knowledge graph"
 
 User Question:
 {question}
@@ -121,9 +124,11 @@ def fusion_summary_prompt(
     Returns:
         The fusion summary prompt.
     """
+    # Filter out empty tool results so the LLM focuses on what actually returned data
+    filtered_neo4j = {k: v for k, v in neo4j_results.items() if v}
     return FUSION_SUMMARY_PROMPT.format(
         question=question,
         qdrant_context=_format_qdrant_points(qdrant_results),
-        neo4j_results=json.dumps(neo4j_results, indent=2),
+        neo4j_results=json.dumps(filtered_neo4j, indent=2) if filtered_neo4j else "No graph results.",
         limit=limit,
     )
